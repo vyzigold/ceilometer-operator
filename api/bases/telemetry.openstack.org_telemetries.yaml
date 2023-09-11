@@ -39,6 +39,69 @@ spec:
                 description: Autoscaling - Spec definition for the Autoscaling service
                   of this Telemetry deployment
                 properties:
+                  aodh:
+                    properties:
+                      apiImage:
+                        type: string
+                      customServiceConfig:
+                        default: '# add your customization here'
+                        description: CustomServiceConfig - customize the service config
+                          using this parameter to change service defaults, or overwrite
+                          rendered information using raw OpenStack config format.
+                          The content gets added to to /etc/<service>/<service>.conf.d
+                          directory as custom.conf file.
+                        type: string
+                      defaultConfigOverwrite:
+                        additionalProperties:
+                          type: string
+                        description: 'ConfigOverwrite - interface to overwrite default
+                          config files like e.g. logging.conf or policy.json. But
+                          can also be used to add additional files. Those get added
+                          to the service config dir in /etc/<service> . TODO: -> implement'
+                        type: object
+                      evaluatorImage:
+                        type: string
+                      initImage:
+                        type: string
+                      listenerImage:
+                        type: string
+                      networkAttachmentDefinitions:
+                        description: NetworkAttachmentDefinitions list of network
+                          attachment definitions the service pod gets attached to
+                        items:
+                          type: string
+                        type: array
+                      notifierImage:
+                        type: string
+                      passwordSelector:
+                        default:
+                          service: CeilometerPassword
+                        description: PasswordSelectors - Selectors to identify the
+                          service from the Secret
+                        properties:
+                          service:
+                            default: CeilometerPassword
+                            description: Service - Selector to get the ceilometer
+                              service password from the Secret
+                            type: string
+                        type: object
+                      secret:
+                        description: Secret containing OpenStack password information
+                          for ceilometer
+                        type: string
+                      serviceUser:
+                        default: ceilometer
+                        description: ServiceUser - optional username used for this
+                          service to register in keystone
+                        type: string
+                    required:
+                    - apiImage
+                    - evaluatorImage
+                    - initImage
+                    - listenerImage
+                    - notifierImage
+                    - secret
+                    type: object
                   enabled:
                     default: false
                     description: Allows enabling and disabling the autoscaling feature

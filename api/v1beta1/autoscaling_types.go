@@ -19,6 +19,15 @@ package v1beta1
 import (
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
+)
+
+const (
+	AodhApiContainerImage = "quay.io/podified-antelope-centos9/openstack-aodh-api:current-podified"
+	AodhEvaluatorContainerImage = "quay.io/podified-antelope-centos9/openstack-aodh-evaluator:current-podified"
+	AodhNotifierContainerImage = "quay.io/podified-antelope-centos9/openstack-aodh-notifier:current-podified"
+	AodhListenerContainerImage = "quay.io/podified-antelope-centos9/openstack-aodh-listener:current-podified"
 )
 
 // Prometheus defines which prometheus to use for Autoscaling
@@ -36,10 +45,47 @@ type Prometheus struct {
 	Port int32 `json:"port,omitempty"`
 }
 
+type Aodh struct {
+	// PasswordSelectors - Selectors to identify the service from the Secret
+	// +kubebuilder:default:={service: CeilometerPassword}
+	PasswordSelectors PasswordsSelector `json:"passwordSelector,omitempty"`
+
+	// ServiceUser - optional username used for this service to register in keystone
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=ceilometer
+	ServiceUser string `json:"serviceUser"`
+
+	// Secret containing OpenStack password information for ceilometer
+	// +kubebuilder:validation:Required
+	Secret string `json:"secret"`
+
+	// CustomServiceConfig - customize the service config using this parameter to change service defaults,
+	// or overwrite rendered information using raw OpenStack config format. The content gets added to
+	// to /etc/<service>/<service>.conf.d directory as custom.conf file.
+	// +kubebuilder:default:="# add your customization here"
+	CustomServiceConfig string `json:"customServiceConfig,omitempty"`
+
+	// ConfigOverwrite - interface to overwrite default config files like e.g. logging.conf or policy.json.
+	// But can also be used to add additional files. Those get added to the service config dir in /etc/<service> .
+	// TODO: -> implement
+	DefaultConfigOverwrite map[string]string `json:"defaultConfigOverwrite,omitempty"`
+
+	// NetworkAttachmentDefinitions list of network attachment definitions the service pod gets attached to
+	NetworkAttachmentDefinitions []string `json:"networkAttachmentDefinitions,omitempty"`
+
+	ApiImage string `json:"apiImage"`
+	EvaluatorImage string `json:"evaluatorImage"`
+	NotifierImage string `json:"notifierImage"`
+	ListenerImage string `json:"listenerImage"`
+	InitImage string `json:"initImage"`
+}
+
 // AutoscalingSpec defines the desired state of Autoscaling
 type AutoscalingSpec struct {
 	// Specification of which prometheus to use for autoscaling
 	Prometheus Prometheus `json:"prometheus,omitempty"`
+
+	Aodh Aodh `json:"aodh,omitempty"`
 
 	// Allows enabling and disabling the autoscaling feature
 	// +kubebuilder:default=false
@@ -101,4 +147,18 @@ func (instance Autoscaling) RbacNamespace() string {
 // RbacResourceName - return the name to be used for rbac objects (serviceaccount, role, rolebinding)
 func (instance Autoscaling) RbacResourceName() string {
 	return "telemetry-" + instance.Name
+}
+
+// SetupDefaultsAutoscaling - initializes any CRD field defaults based on environment variables (the defaulting mechanism itself is implemented via webhooks)
+func SetupDefaultsAutoscaling() {
+	// Acquire environmental defaults and initialize Telemetry defaults with them
+	autoscalingDefaults := AutoscalingDefaults{
+		AodhApiContainerImageURL:      util.GetEnvVar("RELATED_IMAGE_AODH_API_IMAGE_URL_DEFAULT", AodhApiContainerImage),
+		AodhEvaluatorContainerImageURL:  util.GetEnvVar("RELATED_IMAGE_AODH_EVALUATOR_IMAGE_URL_DEFAULT", AodhEvaluatorContainerImage),
+		AodhNotifierContainerImageURL:       util.GetEnvVar("RELATED_IMAGE_AODH_NOTIFIER_IMAGE_URL_DEFAULT", AodhNotifierContainerImage),
+		AodhListenerContainerImageURL: util.GetEnvVar("RELATED_IMAGE_AODH_LISTENER_IMAGE_URL_DEFAULT", AodhListenerContainerImage),
+		AodhInitContainerImageURL: util.GetEnvVar("RELATED_IMAGE_AODH_API_IMAGE_URL_DEFAULT", AodhApiContainerImage),
+	}
+
+	SetupAutoscalingDefaults(autoscalingDefaults)
 }
