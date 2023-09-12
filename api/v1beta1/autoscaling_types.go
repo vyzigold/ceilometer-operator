@@ -46,6 +46,11 @@ type Prometheus struct {
 }
 
 type Aodh struct {
+	// RabbitMQ instance name
+	// Needed to request a transportURL that is created and used in Telemetry
+	// +kubebuilder:default=rabbitmq
+	RabbitMqClusterName string `json:"rabbitMqClusterName,omitempty"`
+
 	// PasswordSelectors - Selectors to identify the service from the Secret
 	// +kubebuilder:default:={service: CeilometerPassword}
 	PasswordSelectors PasswordsSelector `json:"passwordSelector,omitempty"`
@@ -102,6 +107,12 @@ type AutoscalingStatus struct {
 
 	// Conditions
 	Conditions condition.Conditions `json:"conditions,omitempty" optional:"true"`
+
+	// Networks in addtion to the cluster network, the service is attached to
+	Networks []string `json:"networks,omitempty"`
+
+	// TransportURLSecret - Secret containing RabbitMQ transportURL
+	TransportURLSecret string `json:"transportURLSecret,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -12,3 +12,11 @@ spec:
   enabled: true
   prometheus:
     deployPrometheus: true
+  aodh:
+    secret: osp-secret
+    apiImage: "quay.io/podified-antelope-centos9/openstack-aodh-api:current-podified"
+    initImage: "quay.io/podified-antelope-centos9/openstack-aodh-api:current-podified"
+    evaluatorImage: "quay.io/podified-antelope-centos9/openstack-aodh-evaluator:current-podified"
+    notifierImage: "quay.io/podified-antelope-centos9/openstack-aodh-notifier:current-podified"
+    listenerImage: "quay.io/podified-antelope-centos9/openstack-aodh-listener:current-podified"
+

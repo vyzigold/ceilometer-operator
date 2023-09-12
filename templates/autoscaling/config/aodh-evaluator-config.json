@@ -1,0 +1,11 @@
+{
+    "command": "/usr/bin/aodh-evaluator --logfile /dev/stdout",
+    "config_files": [
+      {
+        "source": "/var/lib/config-data/merged/aodh.conf",
+        "dest": "/etc/aodh/aodh.conf",
+        "owner": "aodh",
+        "perm": "0600"
+      }
+    ]
+  }
