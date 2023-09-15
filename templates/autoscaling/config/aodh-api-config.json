@@ -1,5 +1,5 @@
 {
-    "command": "/usr/sbin/httpd -DFOREGROUND",
+    "command": "/usr/sbin/httpd -DFOREGROUND -E /dev/stdout",
     "config_files": [
       {
         "source": "/var/lib/config-data/merged/aodh.conf",

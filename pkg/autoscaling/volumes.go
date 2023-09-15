@@ -54,25 +54,33 @@ func getVolumes(name string) []corev1.Volume {
 			VolumeSource: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{Medium: ""},
 			},
-		}, {
-			Name: "sg-core-conf-yaml",
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					Items: []corev1.KeyToPath{{
-						Key:  "sg-core.conf.yaml",
-						Path: "sg-core.conf.yaml",
-					}},
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: name + "-config-data",
-					},
-				},
-			},
 		},
 	}
 }
 
 // getInitVolumeMounts - general init task VolumeMounts
 func getInitVolumeMounts() []corev1.VolumeMount {
+	return []corev1.VolumeMount{
+		{
+			Name:      "scripts",
+			MountPath: "/usr/local/bin/container-scripts",
+			ReadOnly:  true,
+		},
+		{
+			Name:      "config-data",
+			MountPath: "/var/lib/config-data/default",
+			ReadOnly:  true,
+		},
+		{
+			Name:      "config-data-merged",
+			MountPath: "/var/lib/config-data/merged",
+			ReadOnly:  false,
+		},
+	}
+}
+
+// getDBSyncVolumeMounts - general init task VolumeMounts
+func getDBSyncVolumeMounts() []corev1.VolumeMount {
 	return []corev1.VolumeMount{
 		{
 			Name:      "scripts",

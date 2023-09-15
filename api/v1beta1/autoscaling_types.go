@@ -28,6 +28,9 @@ const (
 	AodhEvaluatorContainerImage = "quay.io/podified-antelope-centos9/openstack-aodh-evaluator:current-podified"
 	AodhNotifierContainerImage = "quay.io/podified-antelope-centos9/openstack-aodh-notifier:current-podified"
 	AodhListenerContainerImage = "quay.io/podified-antelope-centos9/openstack-aodh-listener:current-podified"
+
+	// DbSyncHash hash
+	DbSyncHash = "dbsync"
 )
 
 // Prometheus defines which prometheus to use for Autoscaling
@@ -47,9 +50,20 @@ type Prometheus struct {
 
 type Aodh struct {
 	// RabbitMQ instance name
-	// Needed to request a transportURL that is created and used in Telemetry
+	// Needed to request a transportURL that is created and used in Aodh
 	// +kubebuilder:default=rabbitmq
 	RabbitMqClusterName string `json:"rabbitMqClusterName,omitempty"`
+
+	// +kubebuilder:validation:Required
+	// MariaDB instance name
+	// Right now required by the maridb-operator to get the credentials from the instance to create the DB
+	// Might not be required in future
+	DatabaseInstance string `json:"databaseInstance"`
+
+	// Database user name
+	// Needed to connect to a database used by aodh
+	// +kubebuilder:default=aodh
+	DatabaseUser string `json:"databaseUser,omitempty"`
 
 	// PasswordSelectors - Selectors to identify the service from the Secret
 	// +kubebuilder:default:={service: CeilometerPassword}
@@ -77,6 +91,11 @@ type Aodh struct {
 
 	// NetworkAttachmentDefinitions list of network attachment definitions the service pod gets attached to
 	NetworkAttachmentDefinitions []string `json:"networkAttachmentDefinitions,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=false
+	// PreserveJobs - do not delete jobs after they finished e.g. to check logs
+	PreserveJobs bool `json:"preserveJobs"`
 
 	ApiImage string `json:"apiImage"`
 	EvaluatorImage string `json:"evaluatorImage"`
@@ -113,6 +132,9 @@ type AutoscalingStatus struct {
 
 	// TransportURLSecret - Secret containing RabbitMQ transportURL
 	TransportURLSecret string `json:"transportURLSecret,omitempty"`
+
+	// DatabaseHostname - Hostname for the database
+	DatabaseHostname string `json:"databaseHostname,omitempty"`
 }
 
 //+kubebuilder:object:root=true
