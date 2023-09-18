@@ -117,10 +117,10 @@ spec:
                         type: string
                       secret:
                         description: Secret containing OpenStack password information
-                          for ceilometer
+                          for aodh
                         type: string
                       serviceUser:
-                        default: ceilometer
+                        default: aodh
                         description: ServiceUser - optional username used for this
                           service to register in keystone
                         type: string

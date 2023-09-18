@@ -71,10 +71,10 @@ type Aodh struct {
 
 	// ServiceUser - optional username used for this service to register in keystone
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=ceilometer
+	// +kubebuilder:default=aodh
 	ServiceUser string `json:"serviceUser"`
 
-	// Secret containing OpenStack password information for ceilometer
+	// Secret containing OpenStack password information for aodh
 	// +kubebuilder:validation:Required
 	Secret string `json:"secret"`
 

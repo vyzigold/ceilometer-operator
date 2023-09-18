@@ -263,6 +263,22 @@ func (r *AutoscalingReconciler) reconcileDelete(
 		}
 	}
 
+	// Remove the finalizer from our KeystoneEndpoint CR
+	keystoneEndpoint, err := keystonev1.GetKeystoneEndpointWithName(ctx, helper, instance.Name, instance.Namespace)
+	if err != nil && !k8s_errors.IsNotFound(err) {
+		return ctrl.Result{}, err
+	}
+
+	if err == nil {
+		if controllerutil.RemoveFinalizer(keystoneEndpoint, helper.GetFinalizer()) {
+			err = r.Update(ctx, keystoneEndpoint)
+			if err != nil && !k8s_errors.IsNotFound(err) {
+				return ctrl.Result{}, err
+			}
+			util.LogForObject(helper, "Removed finalizer from our KeystoneEndpoint", instance)
+		}
+	}
+
 	// Service is deleted so remove the finalizer.
 	controllerutil.RemoveFinalizer(instance, helper.GetFinalizer())
 	r.Log.Info(fmt.Sprintf("Reconciled Service '%s' delete successfully", autoscaling.ServiceName))
@@ -594,13 +610,11 @@ func (r *AutoscalingReconciler) reconcileNormal(
 	}
 	instance.Status.Networks = instance.Spec.Aodh.NetworkAttachmentDefinitions
 
-	//	service, _, err = autoscaling.Service(instance, helper, autoscaling.AodhApiPort, serviceLabels)
-	//	if err != nil {
-	//		return ctrl.Result{}, err
-	//	}
-
 	ports := map[endpoint.Endpoint]endpoint.Data{}
 	ports[endpoint.EndpointInternal] = endpoint.Data{
+		Port: autoscaling.AodhApiPort,
+	}
+	ports[endpoint.EndpointPublic] = endpoint.Data{
 		Port: autoscaling.AodhApiPort,
 	}
 

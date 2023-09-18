@@ -2,10 +2,10 @@ package autoscaling
 
 const (
 	// ServiceName -
-	ServiceName = "autoscaling"
+	ServiceName = "aodh"
 
 	// ServiceType -
-	ServiceType = "Autoscaling"
+	ServiceType = "alarming"
 
 	// PrometheusRetention -
 	PrometheusRetention = "5h"
