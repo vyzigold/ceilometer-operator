@@ -20,7 +20,7 @@ const (
 	ServiceCommand = "/usr/local/bin/kolla_set_configs && /usr/local/bin/kolla_start"
 )
 
-// Deployment func
+// AodhDeployment func
 func AodhDeployment(
 	instance *telemetryv1.Autoscaling,
 	configHash string,
@@ -66,7 +66,7 @@ func AodhDeployment(
 			"/bin/bash",
 		},
 		Args:  args,
-		Image: instance.Spec.Aodh.ApiImage,
+		Image: instance.Spec.Aodh.APIImage,
 		Name:  "aodh-api",
 		Env:   env.MergeEnvs([]corev1.EnvVar{}, envVarsAodh),
 		SecurityContext: &corev1.SecurityContext{

@@ -24,6 +24,7 @@ import (
 )
 
 // TODO: We might want to split this to aodh and ceilometer and move it to appropriate files
+
 // PasswordsSelector to identify the Service password from the Secret
 type PasswordsSelector struct {
 	// Service - Selector to get the ceilometer service password from the Secret

@@ -13,8 +13,8 @@ const (
 	// DatabaseName -
 	DatabaseName = "aodh"
 
-	// AodhApiPort -
-	AodhApiPort = 8042
+	// AodhAPIPort -
+	AodhAPIPort = 8042
 )
 
 // PrometheusReplicas -

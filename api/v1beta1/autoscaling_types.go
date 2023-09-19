@@ -24,11 +24,14 @@ import (
 )
 
 const (
-	AodhApiContainerImage = "quay.io/podified-antelope-centos9/openstack-aodh-api:current-podified"
+	// AodhAPIContainerImage - default fall-back image for Aodh API
+	AodhAPIContainerImage = "quay.io/podified-antelope-centos9/openstack-aodh-api:current-podified"
+	// AodhEvaluatorContainerImage - default fall-back image for Aodh Evaluator
 	AodhEvaluatorContainerImage = "quay.io/podified-antelope-centos9/openstack-aodh-evaluator:current-podified"
+	// AodhNotifierContainerImage - default fall-back image for Aodh Notifier
 	AodhNotifierContainerImage = "quay.io/podified-antelope-centos9/openstack-aodh-notifier:current-podified"
+	// AodhListenerContainerImage - default fall-back image for Aodh Listener
 	AodhListenerContainerImage = "quay.io/podified-antelope-centos9/openstack-aodh-listener:current-podified"
-
 	// DbSyncHash hash
 	DbSyncHash = "dbsync"
 )
@@ -48,6 +51,7 @@ type Prometheus struct {
 	Port int32 `json:"port,omitempty"`
 }
 
+// Aodh defines the aodh component spec
 type Aodh struct {
 	// RabbitMQ instance name
 	// Needed to request a transportURL that is created and used in Aodh
@@ -97,7 +101,7 @@ type Aodh struct {
 	// PreserveJobs - do not delete jobs after they finished e.g. to check logs
 	PreserveJobs bool `json:"preserveJobs"`
 
-	ApiImage string `json:"apiImage"`
+	APIImage string `json:"apiImage"`
 	EvaluatorImage string `json:"evaluatorImage"`
 	NotifierImage string `json:"notifierImage"`
 	ListenerImage string `json:"listenerImage"`
@@ -186,11 +190,11 @@ func (instance Autoscaling) RbacResourceName() string {
 func SetupDefaultsAutoscaling() {
 	// Acquire environmental defaults and initialize Telemetry defaults with them
 	autoscalingDefaults := AutoscalingDefaults{
-		AodhApiContainerImageURL:      util.GetEnvVar("RELATED_IMAGE_AODH_API_IMAGE_URL_DEFAULT", AodhApiContainerImage),
+		AodhAPIContainerImageURL:      util.GetEnvVar("RELATED_IMAGE_AODH_API_IMAGE_URL_DEFAULT", AodhAPIContainerImage),
 		AodhEvaluatorContainerImageURL:  util.GetEnvVar("RELATED_IMAGE_AODH_EVALUATOR_IMAGE_URL_DEFAULT", AodhEvaluatorContainerImage),
 		AodhNotifierContainerImageURL:       util.GetEnvVar("RELATED_IMAGE_AODH_NOTIFIER_IMAGE_URL_DEFAULT", AodhNotifierContainerImage),
 		AodhListenerContainerImageURL: util.GetEnvVar("RELATED_IMAGE_AODH_LISTENER_IMAGE_URL_DEFAULT", AodhListenerContainerImage),
-		AodhInitContainerImageURL: util.GetEnvVar("RELATED_IMAGE_AODH_API_IMAGE_URL_DEFAULT", AodhApiContainerImage),
+		AodhInitContainerImageURL: util.GetEnvVar("RELATED_IMAGE_AODH_API_IMAGE_URL_DEFAULT", AodhAPIContainerImage),
 	}
 
 	SetupAutoscalingDefaults(autoscalingDefaults)

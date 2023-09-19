@@ -25,7 +25,7 @@ import (
 
 // AutoscalingDefaults -
 type AutoscalingDefaults struct {
-	AodhApiContainerImageURL      string
+	AodhAPIContainerImageURL      string
 	AodhEvaluatorContainerImageURL  string
 	AodhNotifierContainerImageURL string
 	AodhListenerContainerImageURL       string
@@ -37,7 +37,7 @@ var autoscalingDefaults AutoscalingDefaults
 // log is for logging in this package.
 var autoscalinglog = logf.Log.WithName("autoscaling-resource")
 
-// SetupCeilometerCentralDefaults - initialize Autoscaling spec defaults for use with either internal or external webhooks
+// SetupAutoscalingDefaults - initialize Autoscaling spec defaults for use with either internal or external webhooks
 func SetupAutoscalingDefaults(defaults AutoscalingDefaults) {
 	autoscalingDefaults = defaults
 	autoscalinglog.Info("Autoscaling defaults initialized", "defaults", defaults)
@@ -63,8 +63,8 @@ func (r *Autoscaling) Default() {
 
 // Default - set defaults for this CeilometerCentral spec
 func (spec *AutoscalingSpec) Default() {
-	if spec.Aodh.ApiImage == "" {
-		spec.Aodh.ApiImage = autoscalingDefaults.AodhApiContainerImageURL
+	if spec.Aodh.APIImage == "" {
+		spec.Aodh.APIImage = autoscalingDefaults.AodhAPIContainerImageURL
 	}
 	if spec.Aodh.EvaluatorImage == "" {
 		spec.Aodh.EvaluatorImage = autoscalingDefaults.AodhEvaluatorContainerImageURL

@@ -9,13 +9,14 @@ import (
 )
 
 const (
-	DBSyncCommand = "/usr/local/bin/container-scripts/init.sh && mkdir -p /var/lib/kolla/config_files && cp /var/lib/config-data/merged/aodh-dbsync-config.json /var/lib/kolla/config_files/config.json && /usr/local/bin/kolla_set_configs && /usr/local/bin/kolla_start"
+	// TODO: Change this ugliness
+	dbSyncCommand = "/usr/local/bin/container-scripts/init.sh && mkdir -p /var/lib/kolla/config_files && cp /var/lib/config-data/merged/aodh-dbsync-config.json /var/lib/kolla/config_files/config.json && /usr/local/bin/kolla_set_configs && /usr/local/bin/kolla_start"
 )
 
 // DbSyncJob func
 func DbSyncJob(instance *autoscalingv1beta1.Autoscaling, labels map[string]string) *batchv1.Job {
 	args := []string{"-c"}
-	args = append(args, DBSyncCommand)
+	args = append(args, dbSyncCommand)
 
 	runAsUser := int64(0)
 	envVars := map[string]env.Setter{}
@@ -37,7 +38,7 @@ func DbSyncJob(instance *autoscalingv1beta1.Autoscaling, labels map[string]strin
 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      instance.Name + "-db-sync",
+			Name:      ServiceName + "-db-sync",
 			Namespace: instance.Namespace,
 			Labels:    labels,
 		},
@@ -48,12 +49,12 @@ func DbSyncJob(instance *autoscalingv1beta1.Autoscaling, labels map[string]strin
 					ServiceAccountName: instance.RbacResourceName(),
 					Containers: []corev1.Container{
 						{
-							Name: instance.Name + "-db-sync",
+							Name: ServiceName + "-db-sync",
 							Command: []string{
 								"/bin/bash",
 							},
 							Args:  args,
-							Image: instance.Spec.Aodh.ApiImage,
+							Image: instance.Spec.Aodh.APIImage,
 							SecurityContext: &corev1.SecurityContext{
 								RunAsUser: &runAsUser,
 							},

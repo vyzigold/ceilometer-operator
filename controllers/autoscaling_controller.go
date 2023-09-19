@@ -41,17 +41,13 @@ import (
 	common "github.com/openstack-k8s-operators/lib-common/modules/common"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	configmap "github.com/openstack-k8s-operators/lib-common/modules/common/configmap"
-	deployment "github.com/openstack-k8s-operators/lib-common/modules/common/deployment"
 	endpoint "github.com/openstack-k8s-operators/lib-common/modules/common/endpoint"
 	env "github.com/openstack-k8s-operators/lib-common/modules/common/env"
 	helper "github.com/openstack-k8s-operators/lib-common/modules/common/helper"
-	job "github.com/openstack-k8s-operators/lib-common/modules/common/job"
 	labels "github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
 	secret "github.com/openstack-k8s-operators/lib-common/modules/common/secret"
-	service "github.com/openstack-k8s-operators/lib-common/modules/common/service"
 	util "github.com/openstack-k8s-operators/lib-common/modules/common/util"
-	"github.com/openstack-k8s-operators/lib-common/modules/database"
 	mariadbv1 "github.com/openstack-k8s-operators/mariadb-operator/api/v1beta1"
 
 	rabbitmqv1 "github.com/openstack-k8s-operators/infra-operator/apis/rabbitmq/v1beta1"
@@ -158,12 +154,20 @@ func (r *AutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			condition.UnknownCondition(condition.RoleBindingReadyCondition,
 				condition.InitReason,
 				condition.RoleBindingReadyInitMessage),
+
+			// Prometheus, Aodh, Heat conditions
 			condition.UnknownCondition("PrometheusReady", condition.InitReason, "PrometheusNotStarted"),
+			condition.UnknownCondition("HeatReady", condition.InitReason, "HeatNotStarted"),
+
+			condition.UnknownCondition(condition.ServiceConfigReadyCondition, condition.InitReason, condition.ServiceConfigReadyInitMessage),
 			condition.UnknownCondition(condition.DBReadyCondition, condition.InitReason, condition.DBReadyInitMessage),
 			condition.UnknownCondition(condition.DBSyncReadyCondition, condition.InitReason, condition.DBSyncReadyInitMessage),
 			condition.UnknownCondition(condition.RabbitMqTransportURLReadyCondition, condition.InitReason, condition.RabbitMqTransportURLReadyInitMessage),
+
+			condition.UnknownCondition(condition.DeploymentReadyCondition, condition.InitReason, condition.DeploymentReadyInitMessage),
 			// right now we have no dedicated KeystoneServiceReadyInitMessage
-			//condition.UnknownCondition(condition.KeystoneServiceReadyCondition, condition.InitReason, ""),
+			condition.UnknownCondition(condition.KeystoneServiceReadyCondition, condition.InitReason, ""),
+			condition.UnknownCondition(condition.KeystoneEndpointReadyCondition, condition.InitReason, ""),
 		)
 
 		instance.Status.Conditions.Init(&cl)
@@ -171,6 +175,9 @@ func (r *AutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		// Register overall status immediately to have an early feedback e.g. in the cli
 		return ctrl.Result{}, nil
 	}
+
+	// TODO: Remove this afet Heat integration is added
+	instance.Status.Conditions.MarkTrue("HeatReady", "Functionality not implemented yet")
 
 	if instance.Status.Hash == nil {
 		instance.Status.Hash = map[string]string{}
@@ -196,30 +203,18 @@ func (r *AutoscalingReconciler) reconcileDisabled(
 	helper *helper.Helper,
 ) (ctrl.Result, error) {
 	r.Log.Info("Reconciling Service disabled")
-	serviceLabels := map[string]string{
-		common.AppSelector: autoscaling.ServiceName,
-	}
-	// remove db finalizer first
-	db, err := database.GetDatabaseByName(ctx, helper, instance.Name)
-	if err != nil && !k8s_errors.IsNotFound(err) {
-		return ctrl.Result{}, err
-	}
-
-	if !k8s_errors.IsNotFound(err) {
-		//TODO: This doesn't work
-		if err := db.DeleteFinalizer(ctx, helper); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
-	prom := autoscaling.Prometheus(instance, serviceLabels)
-	err = r.Client.Delete(ctx, prom)
+	ctrlResult, err := r.reconcileDisabledPrometheus(ctx, instance, helper)
 	if err != nil {
-		if !k8s_errors.IsNotFound(err) {
-			return ctrl.Result{}, nil
-		}
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
 	}
-
+	ctrlResult, err = r.reconcileDisabledAodh(ctx, instance, helper)
+	if err != nil {
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
+	}
 	// Set the condition to true, since the service is disabled
 	for _, c := range instance.Status.Conditions {
 		instance.Status.Conditions.MarkTrue(c.Type, "Autoscaling disabled")
@@ -235,50 +230,18 @@ func (r *AutoscalingReconciler) reconcileDelete(
 ) (ctrl.Result, error) {
 	r.Log.Info("Reconciling Service delete")
 
-	// remove db finalizer first
-	db, err := database.GetDatabaseByName(ctx, helper, instance.Name)
-	if err != nil && !k8s_errors.IsNotFound(err) {
-		return ctrl.Result{}, err
+	ctrlResult, err := r.reconcileDeletePrometheus(ctx, instance, helper)
+	if err != nil {
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
 	}
-
-	if !k8s_errors.IsNotFound(err) {
-		if err := db.DeleteFinalizer(ctx, helper); err != nil {
-			return ctrl.Result{}, err
-		}
+	ctrlResult, err = r.reconcileDeleteAodh(ctx, instance, helper)
+	if err != nil {
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
 	}
-
-	// Remove the finalizer from our KeystoneService CR
-	keystoneService, err := keystonev1.GetKeystoneServiceWithName(ctx, helper, autoscaling.ServiceName, instance.Namespace)
-	if err != nil && !k8s_errors.IsNotFound(err) {
-		return ctrl.Result{}, err
-	}
-
-	if err == nil {
-		if controllerutil.RemoveFinalizer(keystoneService, helper.GetFinalizer()) {
-			err = r.Update(ctx, keystoneService)
-			if err != nil && !k8s_errors.IsNotFound(err) {
-				return ctrl.Result{}, err
-			}
-			util.LogForObject(helper, "Removed finalizer from our KeystoneService", instance)
-		}
-	}
-
-	// Remove the finalizer from our KeystoneEndpoint CR
-	keystoneEndpoint, err := keystonev1.GetKeystoneEndpointWithName(ctx, helper, instance.Name, instance.Namespace)
-	if err != nil && !k8s_errors.IsNotFound(err) {
-		return ctrl.Result{}, err
-	}
-
-	if err == nil {
-		if controllerutil.RemoveFinalizer(keystoneEndpoint, helper.GetFinalizer()) {
-			err = r.Update(ctx, keystoneEndpoint)
-			if err != nil && !k8s_errors.IsNotFound(err) {
-				return ctrl.Result{}, err
-			}
-			util.LogForObject(helper, "Removed finalizer from our KeystoneEndpoint", instance)
-		}
-	}
-
 	// Service is deleted so remove the finalizer.
 	controllerutil.RemoveFinalizer(instance, helper.GetFinalizer())
 	r.Log.Info(fmt.Sprintf("Reconciled Service '%s' delete successfully", autoscaling.ServiceName))
@@ -293,156 +256,18 @@ func (r *AutoscalingReconciler) reconcileInit(
 	serviceLabels map[string]string,
 ) (ctrl.Result, error) {
 	r.Log.Info("Reconciling Service init")
-	_, _, err := secret.GetSecret(ctx, helper, instance.Spec.Aodh.Secret, instance.Namespace)
-	if err != nil {
-		if k8s_errors.IsNotFound(err) {
-			return ctrl.Result{RequeueAfter: time.Duration(10) * time.Second}, fmt.Errorf("OpenStack secret %s not found", instance.Spec.Aodh.Secret)
-		}
-		return ctrl.Result{}, err
-	}
-
-	ksSvcSpec := keystonev1.KeystoneServiceSpec{
-		ServiceType:        autoscaling.ServiceType,
-		ServiceName:        autoscaling.ServiceName,
-		ServiceDescription: "Aodh for autoscaling Service",
-		Enabled:            true,
-		ServiceUser:        instance.Spec.Aodh.ServiceUser,
-		Secret:             instance.Spec.Aodh.Secret,
-		PasswordSelector:   instance.Spec.Aodh.PasswordSelectors.Service,
-	}
-
-	ksSvc := keystonev1.NewKeystoneService(ksSvcSpec, instance.Namespace, serviceLabels, 10)
-	ctrlResult, err := ksSvc.CreateOrPatch(ctx, helper)
+	ctrlResult, err := r.reconcileInitPrometheus(ctx, instance, helper, serviceLabels)
 	if err != nil {
 		return ctrlResult, err
-	}
-
-	// mirror the Status, Reason, Severity and Message of the latest keystoneservice condition
-	// into a local condition with the type condition.KeystoneServiceReadyCondition
-	c := ksSvc.GetConditions().Mirror(condition.KeystoneServiceReadyCondition)
-	if c != nil {
-		instance.Status.Conditions.Set(c)
-	}
-
-	if (ctrlResult != ctrl.Result{}) {
+	} else if (ctrlResult != ctrl.Result{}) {
 		return ctrlResult, nil
 	}
-
-	if instance.Status.Hash == nil {
-		instance.Status.Hash = map[string]string{}
-	}
-
-	//
-	// create service DB instance
-	//
-	db := database.NewDatabase(
-		// instance.Name
-		// TODO: We might want to change the db name.
-		// The mariadb-operator is currently implemented
-		// in a way, that the db name needs to be the
-		// same as the user
-		instance.Spec.Aodh.DatabaseUser,
-		instance.Spec.Aodh.DatabaseUser,
-		instance.Spec.Aodh.Secret,
-		map[string]string{
-			"dbName": instance.Spec.Aodh.DatabaseInstance,
-		},
-	)
-	fmt.Println(instance.Name)
-	fmt.Println(instance.Spec.Aodh.DatabaseUser)
-	fmt.Println(instance.Spec.Aodh.Secret)
-	fmt.Println(instance.Spec.Aodh.DatabaseInstance)
-	// create or patch the DB
-	ctrlResult, err = db.CreateOrPatchDBByName(
-		ctx,
-		helper,
-		instance.Spec.Aodh.DatabaseInstance,
-	)
+	ctrlResult, err = r.reconcileInitAodh(ctx, instance, helper, serviceLabels)
 	if err != nil {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.DBReadyCondition,
-			condition.ErrorReason,
-			condition.SeverityWarning,
-			condition.DBReadyErrorMessage,
-			err.Error()))
-		return ctrl.Result{}, err
-	}
-	if (ctrlResult != ctrl.Result{}) {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.DBReadyCondition,
-			condition.RequestedReason,
-			condition.SeverityInfo,
-			condition.DBReadyRunningMessage))
-		return ctrlResult, nil
-	}
-	// wait for the DB to be setup
-	ctrlResult, err = db.WaitForDBCreated(ctx, helper)
-	if err != nil {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.DBReadyCondition,
-			condition.ErrorReason,
-			condition.SeverityWarning,
-			condition.DBReadyErrorMessage,
-			err.Error()))
 		return ctrlResult, err
-	}
-	if (ctrlResult != ctrl.Result{}) {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.DBReadyCondition,
-			condition.RequestedReason,
-			condition.SeverityInfo,
-			condition.DBReadyRunningMessage))
+	} else if (ctrlResult != ctrl.Result{}) {
 		return ctrlResult, nil
 	}
-	// update Status.DatabaseHostname, used to config the service
-	instance.Status.DatabaseHostname = db.GetDatabaseHostname()
-	instance.Status.Conditions.MarkTrue(condition.DBReadyCondition, condition.DBReadyMessage)
-	// create service DB - end
-
-	//
-	// run Aodh db sync
-	dbSyncHash := instance.Status.Hash[telemetryv1.DbSyncHash]
-	jobDef := autoscaling.DbSyncJob(instance, serviceLabels)
-
-	dbSyncjob := job.NewJob(
-		jobDef,
-		telemetryv1.DbSyncHash,
-		instance.Spec.Aodh.PreserveJobs,
-		time.Duration(5)*time.Second,
-		dbSyncHash,
-	)
-	ctrlResult, err = dbSyncjob.DoJob(
-		ctx,
-		helper,
-	)
-	if (ctrlResult != ctrl.Result{}) {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.DBSyncReadyCondition,
-			condition.RequestedReason,
-			condition.SeverityInfo,
-			condition.DBSyncReadyRunningMessage))
-		return ctrlResult, nil
-	}
-	if err != nil {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.DBSyncReadyCondition,
-			condition.ErrorReason,
-			condition.SeverityWarning,
-			condition.DBSyncReadyErrorMessage,
-			err.Error()))
-		return ctrl.Result{}, err
-	}
-	if dbSyncjob.HasChanged() {
-		instance.Status.Hash[telemetryv1.DbSyncHash] = dbSyncjob.GetHash()
-		r.Log.Info(fmt.Sprintf("Service '%s' - Job %s hash added - %s", instance.Name, jobDef.Name, instance.Status.Hash[telemetryv1.DbSyncHash]))
-	}
-	instance.Status.Conditions.MarkTrue(condition.DBSyncReadyCondition, condition.DBSyncReadyMessage)
-
-	// when job passed, mark NetworkAttachmentsReadyCondition ready
-	instance.Status.Conditions.MarkTrue(condition.NetworkAttachmentsReadyCondition, condition.NetworkAttachmentsReadyMessage)
-
-	// run Cinder db sync - end
-
 	r.Log.Info("Reconciled Service init successfully")
 	return ctrl.Result{}, nil
 
@@ -566,160 +391,19 @@ func (r *AutoscalingReconciler) reconcileNormal(
 	} else if (ctrlResult != ctrl.Result{}) {
 		return ctrlResult, nil
 	}
-
-	promResult, err := r.reconcilePrometheus(ctx, instance, helper, serviceLabels)
+	ctrlResult, err = r.reconcileNormalPrometheus(ctx, instance, helper)
 	if err != nil {
-		return promResult, err
-	}
-
-	deplDef, err := autoscaling.AodhDeployment(instance, inputHash, serviceLabels)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	depl := deployment.NewDeployment(
-		deplDef,
-		time.Duration(5)*time.Second,
-	)
-
-	ctrlResult, err = depl.CreateOrPatch(ctx, helper)
-	if err != nil {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.DeploymentReadyCondition,
-			condition.ErrorReason,
-			condition.SeverityWarning,
-			condition.DeploymentReadyErrorMessage,
-			err.Error()))
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			condition.DeploymentReadyCondition,
-			condition.RequestedReason,
-			condition.SeverityInfo,
-			condition.DeploymentReadyRunningMessage))
 		return ctrlResult, nil
 	}
-
-	err = controllerutil.SetControllerReference(instance, deplDef, r.Scheme)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	instance.Status.ReadyCount = depl.GetDeployment().Status.ReadyReplicas
-	if instance.Status.ReadyCount > 0 {
-		instance.Status.Conditions.MarkTrue(condition.DeploymentReadyCondition, condition.DeploymentReadyMessage)
-	}
-	instance.Status.Networks = instance.Spec.Aodh.NetworkAttachmentDefinitions
-
-	ports := map[endpoint.Endpoint]endpoint.Data{}
-	ports[endpoint.EndpointInternal] = endpoint.Data{
-		Port: autoscaling.AodhApiPort,
-	}
-	ports[endpoint.EndpointPublic] = endpoint.Data{
-		Port: autoscaling.AodhApiPort,
-	}
-
-	apiEndpoints, ctrlResult, err := endpoint.ExposeEndpoints(
-		ctx,
-		helper,
-		autoscaling.ServiceName,
-		serviceLabels,
-		ports,
-		time.Duration(5)*time.Second,
-	)
+	ctrlResult, err = r.reconcileNormalAodh(ctx, instance, helper, inputHash)
 	if err != nil {
 		return ctrlResult, err
-	}
-
-	//
-	// create keystone endpoints
-	//
-
-	ksEndpointSpec := keystonev1.KeystoneEndpointSpec{
-		ServiceName: autoscaling.ServiceName,
-		Endpoints:   apiEndpoints,
-	}
-
-	ksSvc := keystonev1.NewKeystoneEndpoint(instance.Name, instance.Namespace, ksEndpointSpec, serviceLabels, time.Duration(10)*time.Second)
-	ctrlResult, err = ksSvc.CreateOrPatch(ctx, helper)
-	if err != nil {
-		return ctrlResult, err
-	}
-
-	if (ctrlResult != ctrl.Result{}) {
+	} else if (ctrlResult != ctrl.Result{}) {
 		return ctrlResult, nil
 	}
-
 	r.Log.Info("Reconciled Service successfully")
-	return ctrl.Result{}, nil
-}
-
-func (r *AutoscalingReconciler) reconcilePrometheus(ctx context.Context,
-	instance *telemetryv1.Autoscaling,
-	helper *helper.Helper,
-	serviceLabels map[string]string,
-) (ctrl.Result, error) {
-	prom := autoscaling.Prometheus(instance, serviceLabels)
-
-	var promHost string
-	var promPort int32
-
-	if instance.Spec.Prometheus.DeployPrometheus {
-		op, err := controllerutil.CreateOrUpdate(ctx, r.Client, prom, func() error {
-			err := controllerutil.SetControllerReference(instance, prom, r.Scheme)
-			return err
-		})
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if op != controllerutil.OperationResultNone {
-			r.Log.Info(fmt.Sprintf("Prometheus %s successfully reconciled - operation: %s", prom.Name, string(op)))
-		}
-		promReady := true
-		for _, c := range prom.Status.Conditions {
-			if c.Status != "True" {
-				instance.Status.Conditions.MarkFalse("PrometheusReady",
-					condition.Reason(c.Reason),
-					condition.SeverityError,
-					c.Message)
-				promReady = false
-				break
-			}
-		}
-		if len(prom.Status.Conditions) == 0 {
-			promReady = false
-		}
-		if promReady {
-			instance.Status.Conditions.MarkTrue("PrometheusReady", "Prometheus is ready")
-			serviceName := prom.Name + "-prometheus"
-			promSvc, err := service.GetServiceWithName(ctx, helper, serviceName, instance.Namespace)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			// TODO: Remove the nolint after adding aodh and using the variables
-			promHost = fmt.Sprintf("%s.%s.svc", serviceName, instance.Namespace) //nolint:all
-			promPort = service.GetServicesPortDetails(promSvc, "web").Port       //nolint:all
-		}
-	} else {
-		err := r.Client.Delete(ctx, prom)
-		if err != nil {
-			if !k8s_errors.IsNotFound(err) {
-				return ctrl.Result{}, nil
-			}
-		}
-		promHost = instance.Spec.Prometheus.Host
-		promPort = instance.Spec.Prometheus.Port
-		if promHost == "" || promPort == 0 {
-			instance.Status.Conditions.MarkFalse("PrometheusReady",
-				condition.ErrorReason,
-				condition.SeverityError,
-				"deployPrometheus is false and either port or host isn't set")
-		} else {
-			instance.Status.Conditions.MarkTrue("PrometheusReady", "Prometheus is ready")
-		}
-	}
-
-	// TODO: Pass the promHost and promPort variables to aodh
-
 	return ctrl.Result{}, nil
 }
 
