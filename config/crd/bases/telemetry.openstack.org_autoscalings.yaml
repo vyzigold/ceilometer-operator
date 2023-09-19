@@ -36,6 +36,7 @@ spec:
             description: AutoscalingSpec defines the desired state of Autoscaling
             properties:
               aodh:
+                description: Aodh defines the aodh component spec
                 properties:
                   apiImage:
                     type: string

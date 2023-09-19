@@ -40,6 +40,7 @@ spec:
                   of this Telemetry deployment
                 properties:
                   aodh:
+                    description: Aodh defines the aodh component spec
                     properties:
                       apiImage:
                         type: string
