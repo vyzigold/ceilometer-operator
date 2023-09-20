@@ -177,12 +177,5 @@ func AodhDeployment(
 	}
 	deployment.Spec.Template.Annotations = util.MergeStringMaps(deployment.Spec.Template.Annotations, nwAnnotation)
 
-	initContainerDetails := APIDetails{
-		ContainerImage:  instance.Spec.Aodh.InitImage,
-		OSPSecret:       instance.Spec.Aodh.Secret,
-		ServiceSelector: instance.Spec.Aodh.PasswordSelectors.Service,
-	}
-	deployment.Spec.Template.Spec.InitContainers = initContainer(initContainerDetails)
-
 	return deployment, nil
 }

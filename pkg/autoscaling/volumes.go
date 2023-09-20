@@ -19,11 +19,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+const (
+	scriptVolume = "aodh-scripts"
+	configVolume = "aodh-config-data"
+	logVolume    = "logs"
+)
+
 var (
-	// ScriptsVolumeDefaultMode is the default permissions mode for Scripts volume
-	ScriptsVolumeDefaultMode int32 = 0755
-	// Config0640AccessMode is the 640 permissions mode
-	Config0640AccessMode int32 = 0640
+	// scriptMode is the default permissions mode for Scripts volume
+	scriptMode int32 = 0740
+	// configMode is the 640 permissions mode
+	configMode int32 = 0640
 )
 
 // getVolumes - service volumes
@@ -32,70 +38,19 @@ func getVolumes(name string) []corev1.Volume {
 		{
 			Name: "scripts",
 			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					DefaultMode: &ScriptsVolumeDefaultMode,
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: name + "-scripts",
-					},
+				Secret: &corev1.SecretVolumeSource{
+					DefaultMode: &scriptMode,
+					SecretName:  scriptVolume,
 				},
 			},
 		}, {
 			Name: "config-data",
 			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					DefaultMode: &Config0640AccessMode,
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: name + "-config-data",
-					},
+				Secret: &corev1.SecretVolumeSource{
+					DefaultMode: &configMode,
+					SecretName:  configVolume,
 				},
 			},
-		}, {
-			Name: "config-data-merged",
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{Medium: ""},
-			},
-		},
-	}
-}
-
-// getInitVolumeMounts - general init task VolumeMounts
-func getInitVolumeMounts() []corev1.VolumeMount {
-	return []corev1.VolumeMount{
-		{
-			Name:      "scripts",
-			MountPath: "/usr/local/bin/container-scripts",
-			ReadOnly:  true,
-		},
-		{
-			Name:      "config-data",
-			MountPath: "/var/lib/config-data/default",
-			ReadOnly:  true,
-		},
-		{
-			Name:      "config-data-merged",
-			MountPath: "/var/lib/config-data/merged",
-			ReadOnly:  false,
-		},
-	}
-}
-
-// getDBSyncVolumeMounts - general init task VolumeMounts
-func getDBSyncVolumeMounts() []corev1.VolumeMount {
-	return []corev1.VolumeMount{
-		{
-			Name:      "scripts",
-			MountPath: "/usr/local/bin/container-scripts",
-			ReadOnly:  true,
-		},
-		{
-			Name:      "config-data",
-			MountPath: "/var/lib/config-data/default",
-			ReadOnly:  true,
-		},
-		{
-			Name:      "config-data-merged",
-			MountPath: "/var/lib/config-data/merged",
-			ReadOnly:  false,
 		},
 	}
 }
@@ -105,16 +60,16 @@ func getVolumeMounts(serviceName string) []corev1.VolumeMount {
 	return []corev1.VolumeMount{
 		{
 			Name:      "scripts",
-			MountPath: "/usr/local/bin/container-scripts",
+			MountPath: "/var/lib/openstack/bin",
 			ReadOnly:  true,
 		},
 		{
-			Name:      "config-data-merged",
-			MountPath: "/var/lib/config-data/merged",
-			ReadOnly:  false,
+			Name:      "config-data",
+			MountPath: "/var/lib/openstack/config",
+			ReadOnly:  true,
 		},
 		{
-			Name:      "config-data-merged",
+			Name:      "config-data",
 			MountPath: "/var/lib/kolla/config_files/config.json",
 			SubPath:   serviceName + "-config.json",
 			ReadOnly:  true,

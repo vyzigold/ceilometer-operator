@@ -26,7 +26,7 @@ import (
 
 const (
 	// TODO: Change this ugliness
-	dbSyncCommand = "/usr/local/bin/container-scripts/init.sh && mkdir -p /var/lib/kolla/config_files && cp /var/lib/config-data/merged/aodh-dbsync-config.json /var/lib/kolla/config_files/config.json && /usr/local/bin/kolla_set_configs && /usr/local/bin/kolla_start"
+	dbSyncCommand = "/usr/local/bin/kolla_set_configs && /usr/local/bin/kolla_start"
 )
 
 // DbSyncJob func
@@ -75,7 +75,7 @@ func DbSyncJob(instance *autoscalingv1beta1.Autoscaling, labels map[string]strin
 								RunAsUser: &runAsUser,
 							},
 							Env:          env.MergeEnvs(aodhPassword, envVars),
-							VolumeMounts: getDBSyncVolumeMounts(),
+							VolumeMounts: getVolumeMounts("aodh-dbsync"),
 						},
 					},
 					Volumes: getVolumes(ServiceName),
