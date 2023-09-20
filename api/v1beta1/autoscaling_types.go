@@ -110,7 +110,6 @@ type Aodh struct {
 	EvaluatorImage string `json:"evaluatorImage"`
 	NotifierImage string `json:"notifierImage"`
 	ListenerImage string `json:"listenerImage"`
-	InitImage string `json:"initImage"`
 }
 
 // AutoscalingSpec defines the desired state of Autoscaling
@@ -199,7 +198,6 @@ func SetupDefaultsAutoscaling() {
 		AodhEvaluatorContainerImageURL:  util.GetEnvVar("RELATED_IMAGE_AODH_EVALUATOR_IMAGE_URL_DEFAULT", AodhEvaluatorContainerImage),
 		AodhNotifierContainerImageURL:       util.GetEnvVar("RELATED_IMAGE_AODH_NOTIFIER_IMAGE_URL_DEFAULT", AodhNotifierContainerImage),
 		AodhListenerContainerImageURL: util.GetEnvVar("RELATED_IMAGE_AODH_LISTENER_IMAGE_URL_DEFAULT", AodhListenerContainerImage),
-		AodhInitContainerImageURL: util.GetEnvVar("RELATED_IMAGE_AODH_API_IMAGE_URL_DEFAULT", AodhAPIContainerImage),
 	}
 
 	SetupAutoscalingDefaults(autoscalingDefaults)

@@ -29,7 +29,6 @@ type AutoscalingDefaults struct {
 	AodhEvaluatorContainerImageURL string
 	AodhNotifierContainerImageURL  string
 	AodhListenerContainerImageURL  string
-	AodhInitContainerImageURL      string
 }
 
 var autoscalingDefaults AutoscalingDefaults

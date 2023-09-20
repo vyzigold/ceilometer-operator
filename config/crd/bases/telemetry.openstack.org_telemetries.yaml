@@ -72,8 +72,6 @@ spec:
                         type: object
                       evaluatorImage:
                         type: string
-                      initImage:
-                        type: string
                       listenerImage:
                         type: string
                       memcachedInstance:
@@ -133,7 +131,6 @@ spec:
                     - apiImage
                     - databaseInstance
                     - evaluatorImage
-                    - initImage
                     - listenerImage
                     - memcachedInstance
                     - notifierImage
