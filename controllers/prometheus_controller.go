@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -90,6 +91,7 @@ func (r *AutoscalingReconciler) reconcileNormalPrometheus(
 		common.AppSelector: autoscaling.ServiceName,
 	}
 	prom := autoscaling.Prometheus(instance, serviceLabels)
+	r.Log.Info(fmt.Sprintf("Reconciling Service Aodh '%s'", prom.Name))
 
 	var promHost string
 	var promPort int32
@@ -126,9 +128,10 @@ func (r *AutoscalingReconciler) reconcileNormalPrometheus(
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			// TODO: Remove the nolint after adding aodh and using the variables
-			promHost = fmt.Sprintf("%s.%s.svc", serviceName, instance.Namespace) //nolint:all
-			promPort = service.GetServicesPortDetails(promSvc, "web").Port       //nolint:all
+			promHost = fmt.Sprintf("%s.%s.svc", serviceName, instance.Namespace)
+			promPort = service.GetServicesPortDetails(promSvc, "web").Port
+		} else {
+			return ctrl.Result{RequeueAfter: time.Duration(10) * time.Second}, fmt.Errorf("Prometheus %s isn't ready", prom.Name)
 		}
 	} else {
 		err := r.Client.Delete(ctx, prom)
@@ -149,7 +152,9 @@ func (r *AutoscalingReconciler) reconcileNormalPrometheus(
 		}
 	}
 
-	// TODO: Pass the promHost and promPort variables to aodh
+	instance.Status.PrometheusHost = promHost
+	instance.Status.PrometheusPort = promPort
 
+	r.Log.Info(fmt.Sprintf("Reconciled Service Aodh '%s' successfully", prom.Name))
 	return ctrl.Result{}, nil
 }

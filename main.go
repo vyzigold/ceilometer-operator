@@ -152,6 +152,7 @@ func main() {
 	// Acquire environmental defaults and initialize defaults with them
 	telemetryv1beta1.SetupDefaultsTelemetry()
 	telemetryv1beta1.SetupDefaultsCeilometer()
+	telemetryv1beta1.SetupDefaultsAutoscaling()
 
 	// Setup webhooks if requested
 	checker := healthz.Ping
@@ -162,6 +163,10 @@ func main() {
 		}
 		if err = (&telemetryv1beta1.Ceilometer{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "Ceilometer")
+			os.Exit(1)
+		}
+		if err = (&telemetryv1beta1.Autoscaling{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Autoscaling")
 			os.Exit(1)
 		}
 		checker = mgr.GetWebhookServer().StartedChecker()

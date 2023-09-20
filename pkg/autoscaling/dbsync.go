@@ -25,7 +25,6 @@ import (
 )
 
 const (
-	// TODO: Change this ugliness
 	dbSyncCommand = "/usr/local/bin/kolla_set_configs && /usr/local/bin/kolla_start"
 )
 

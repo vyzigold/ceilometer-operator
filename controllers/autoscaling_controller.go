@@ -440,22 +440,25 @@ func (r *AutoscalingReconciler) reconcileNormal(
 
 	// Handle service init
 	ctrlResult, err = r.reconcileInit(ctx, instance, helper, serviceLabels)
+	if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
+	}
 	if err != nil {
 		return ctrlResult, err
-	} else if (ctrlResult != ctrl.Result{}) {
-		return ctrlResult, nil
 	}
 	ctrlResult, err = r.reconcileNormalPrometheus(ctx, instance, helper)
-	if err != nil {
-		return ctrlResult, err
-	} else if (ctrlResult != ctrl.Result{}) {
+	if (ctrlResult != ctrl.Result{}) {
 		return ctrlResult, nil
 	}
-	ctrlResult, err = r.reconcileNormalAodh(ctx, instance, helper, inputHash)
 	if err != nil {
 		return ctrlResult, err
-	} else if (ctrlResult != ctrl.Result{}) {
+	}
+	ctrlResult, err = r.reconcileNormalAodh(ctx, instance, helper, inputHash)
+	if (ctrlResult != ctrl.Result{}) {
 		return ctrlResult, nil
+	}
+	if err != nil {
+		return ctrlResult, err
 	}
 	r.Log.Info("Reconciled Service successfully")
 	return ctrl.Result{}, nil
@@ -523,6 +526,8 @@ func (r *AutoscalingReconciler) generateServiceConfig(
 		"AodhPassword":             string(ospSecret.Data[instance.Spec.Aodh.PasswordSelectors.AodhService]),
 		"KeystoneInternalURL":      keystoneInternalURL,
 		"TransportURL":             string(transportURLSecret.Data["transport_url"]),
+		"PrometheusHost":           instance.Status.PrometheusHost,
+		"PrometheusPort":           instance.Status.PrometheusPort,
 		"MemcachedServers":         strings.Join(mc.Status.ServerList, ","),
 		"MemcachedServersWithInet": strings.Join(mc.Status.ServerListWithInet, ","),
 		"DatabaseConnection": fmt.Sprintf("mysql+pymysql://%s:%s@%s/%s",

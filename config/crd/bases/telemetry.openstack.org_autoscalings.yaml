@@ -36,7 +36,7 @@ spec:
             description: AutoscalingSpec defines the desired state of Autoscaling
             properties:
               aodh:
-                description: Aodh defines the aodh component spec
+                description: Aodh spec
                 properties:
                   apiImage:
                     type: string
@@ -216,6 +216,13 @@ spec:
                 items:
                   type: string
                 type: array
+              prometheusHostname:
+                description: PrometheusHost - Hostname for prometheus used for autoscaling
+                type: string
+              prometheusPort:
+                description: PrometheusPort - Port for prometheus used for autoscaling
+                format: int32
+                type: integer
               readyCount:
                 description: ReadyCount of autoscaling instances
                 format: int32

@@ -11,7 +11,7 @@ metadata:
 spec:
   enabled: true
   prometheus:
-    deployPrometheus: false
+    deployPrometheus: true
   aodh:
     secret: osp-secret
     apiImage: "quay.io/podified-antelope-centos9/openstack-aodh-api:current-podified"

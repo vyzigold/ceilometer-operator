@@ -106,9 +106,16 @@ type Aodh struct {
 	// Memcached instance name.
 	MemcachedInstance string `json:"memcachedInstance"`
 
+	// +kubebuilder:validation:Required
 	APIImage string `json:"apiImage"`
+
+	// +kubebuilder:validation:Required
 	EvaluatorImage string `json:"evaluatorImage"`
+
+	// +kubebuilder:validation:Required
 	NotifierImage string `json:"notifierImage"`
+
+	// +kubebuilder:validation:Required
 	ListenerImage string `json:"listenerImage"`
 }
 
@@ -117,6 +124,7 @@ type AutoscalingSpec struct {
 	// Specification of which prometheus to use for autoscaling
 	Prometheus Prometheus `json:"prometheus,omitempty"`
 
+	// Aodh spec
 	Aodh Aodh `json:"aodh,omitempty"`
 
 	// Allows enabling and disabling the autoscaling feature
@@ -143,6 +151,12 @@ type AutoscalingStatus struct {
 
 	// DatabaseHostname - Hostname for the database
 	DatabaseHostname string `json:"databaseHostname,omitempty"`
+
+	// PrometheusHost - Hostname for prometheus used for autoscaling
+	PrometheusHost string `json:"prometheusHostname,omitempty"`
+
+	// PrometheusPort - Port for prometheus used for autoscaling
+	PrometheusPort int32 `json:"prometheusPort,omitempty"`
 }
 
 //+kubebuilder:object:root=true

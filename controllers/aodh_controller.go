@@ -46,7 +46,13 @@ func (r *AutoscalingReconciler) reconcileDisabledAodh(
 	helper *helper.Helper,
 ) (ctrl.Result, error) {
 	r.Log.Info("Reconciling Service Aodh disabled")
-	r.reconcileDeleteAodh(ctx, instance, helper)
+	ctrlResult, err := r.reconcileDeleteAodh(ctx, instance, helper)
+	if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
+	}
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	instance.Status.Conditions = condition.Conditions{}
 	instance.Status.Conditions.MarkTrue(condition.ReadyCondition, "Autoscaling disabled")
 	r.Log.Info(fmt.Sprintf("Reconciled Service Aodh '%s' disable successfully", autoscaling.ServiceName))
