@@ -11,9 +11,9 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-telemetry-openstack-org-v1beta1-ceilometercentral
+      path: /mutate-telemetry-openstack-org-v1beta1-autoscaling
   failurePolicy: Fail
-  name: mceilometercentral.kb.io
+  name: mautoscaling.kb.io
   rules:
   - apiGroups:
     - telemetry.openstack.org
@@ -23,7 +23,7 @@ webhooks:
     - CREATE
     - UPDATE
     resources:
-    - ceilometercentrals
+    - autoscalings
   sideEffects: None
 - admissionReviewVersions:
   - v1
@@ -78,9 +78,9 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-telemetry-openstack-org-v1beta1-ceilometercentral
+      path: /validate-telemetry-openstack-org-v1beta1-autoscaling
   failurePolicy: Fail
-  name: vceilometercentral.kb.io
+  name: vautoscaling.kb.io
   rules:
   - apiGroups:
     - telemetry.openstack.org
@@ -90,7 +90,7 @@ webhooks:
     - CREATE
     - UPDATE
     resources:
-    - ceilometercentrals
+    - autoscalings
   sideEffects: None
 - admissionReviewVersions:
   - v1

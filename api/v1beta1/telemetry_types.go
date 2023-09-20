@@ -109,6 +109,14 @@ func SetupDefaultsTelemetry() {
 		NotificationContainerImageURL: util.GetEnvVar("RELATED_IMAGE_CEILOMETER_NOTIFICATION_IMAGE_URL_DEFAULT", CeilometerNotificationContainerImage),
 		NodeExporterContainerImageURL: util.GetEnvVar("RELATED_IMAGE_TELEMETRY_NODE_EXPORTER_IMAGE_URL_DEFAULT", NodeExporterContainerImage),
 		SgCoreContainerImageURL:       util.GetEnvVar("RELATED_IMAGE_CEILOMETER_SGCORE_IMAGE_URL_DEFAULT", CeilometerSgCoreContainerImage),
+
+		// Autoscaling
+		AodhAPIContainerImageURL:      util.GetEnvVar("RELATED_IMAGE_AODH_API_IMAGE_URL_DEFAULT", AodhAPIContainerImage),
+                AodhEvaluatorContainerImageURL:  util.GetEnvVar("RELATED_IMAGE_AODH_EVALUATOR_IMAGE_URL_DEFAULT", AodhEvaluatorContainerImage),
+                AodhNotifierContainerImageURL:       util.GetEnvVar("RELATED_IMAGE_AODH_NOTIFIER_IMAGE_URL_DEFAULT", AodhNotifierContainerImage),
+                AodhListenerContainerImageURL: util.GetEnvVar("RELATED_IMAGE_AODH_LISTENER_IMAGE_URL_DEFAULT", AodhListenerContainerImage),
+                AodhInitContainerImageURL: util.GetEnvVar("RELATED_IMAGE_AODH_API_IMAGE_URL_DEFAULT", AodhAPIContainerImage),
+
 	}
 
 	SetupTelemetryDefaults(telemetryDefaults)

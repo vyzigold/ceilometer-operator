@@ -22,3 +22,4 @@ spec:
     passwordSelectors:
     databaseUser: aodh
     databaseInstance: openstack
+    memcachedInstance: memcached

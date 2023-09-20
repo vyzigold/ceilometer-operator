@@ -70,7 +70,7 @@ type Aodh struct {
 	DatabaseUser string `json:"databaseUser,omitempty"`
 
 	// PasswordSelectors - Selectors to identify the service from the Secret
-	// +kubebuilder:default:={service: CeilometerPassword}
+	// +kubebuilder:default:={aodhService: AodhPassword}
 	PasswordSelectors PasswordsSelector `json:"passwordSelector,omitempty"`
 
 	// ServiceUser - optional username used for this service to register in keystone
@@ -100,6 +100,11 @@ type Aodh struct {
 	// +kubebuilder:default=false
 	// PreserveJobs - do not delete jobs after they finished e.g. to check logs
 	PreserveJobs bool `json:"preserveJobs"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:default=memcached
+	// Memcached instance name.
+	MemcachedInstance string `json:"memcachedInstance"`
 
 	APIImage string `json:"apiImage"`
 	EvaluatorImage string `json:"evaluatorImage"`

@@ -37,6 +37,7 @@ import (
 
 	keystonev1 "github.com/openstack-k8s-operators/keystone-operator/api/v1beta1"
 
+	memcachedv1 "github.com/openstack-k8s-operators/infra-operator/apis/memcached/v1beta1"
 	rabbitmqv1 "github.com/openstack-k8s-operators/infra-operator/apis/rabbitmq/v1beta1"
 	mariadbv1beta1 "github.com/openstack-k8s-operators/mariadb-operator/api/v1beta1"
 	ansibleeev1 "github.com/openstack-k8s-operators/openstack-ansibleee-operator/api/v1alpha1"
@@ -62,6 +63,7 @@ func init() {
 	utilruntime.Must(obov1.AddToScheme(scheme))
 	utilruntime.Must(mariadbv1beta1.AddToScheme(scheme))
 	utilruntime.Must(routev1.AddToScheme(scheme))
+	utilruntime.Must(memcachedv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 

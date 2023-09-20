@@ -25,11 +25,11 @@ import (
 
 // AutoscalingDefaults -
 type AutoscalingDefaults struct {
-	AodhAPIContainerImageURL      string
-	AodhEvaluatorContainerImageURL  string
-	AodhNotifierContainerImageURL string
-	AodhListenerContainerImageURL       string
-	AodhInitContainerImageURL       string
+	AodhAPIContainerImageURL       string
+	AodhEvaluatorContainerImageURL string
+	AodhNotifierContainerImageURL  string
+	AodhListenerContainerImageURL  string
+	AodhInitContainerImageURL      string
 }
 
 var autoscalingDefaults AutoscalingDefaults
@@ -50,7 +50,7 @@ func (r *Autoscaling) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-//+kubebuilder:webhook:path=/mutate-telemetry-openstack-org-v1beta1-ceilometercentral,mutating=true,failurePolicy=fail,sideEffects=None,groups=telemetry.openstack.org,resources=ceilometercentrals,verbs=create;update,versions=v1beta1,name=mceilometercentral.kb.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/mutate-telemetry-openstack-org-v1beta1-autoscaling,mutating=true,failurePolicy=fail,sideEffects=None,groups=telemetry.openstack.org,resources=autoscalings,verbs=create;update,versions=v1beta1,name=mautoscaling.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Defaulter = &Autoscaling{}
 
@@ -61,7 +61,7 @@ func (r *Autoscaling) Default() {
 	r.Spec.Default()
 }
 
-// Default - set defaults for this CeilometerCentral spec
+// Default - set defaults for this Autoscaling spec
 func (spec *AutoscalingSpec) Default() {
 	if spec.Aodh.APIImage == "" {
 		spec.Aodh.APIImage = autoscalingDefaults.AodhAPIContainerImageURL
@@ -78,7 +78,7 @@ func (spec *AutoscalingSpec) Default() {
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/validate-telemetry-openstack-org-v1beta1-ceilometercentral,mutating=false,failurePolicy=fail,sideEffects=None,groups=telemetry.openstack.org,resources=ceilometercentrals,verbs=create;update,versions=v1beta1,name=vceilometercentral.kb.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-telemetry-openstack-org-v1beta1-autoscaling,mutating=false,failurePolicy=fail,sideEffects=None,groups=telemetry.openstack.org,resources=autoscalings,verbs=create;update,versions=v1beta1,name=vautoscaling.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Validator = &Autoscaling{}
 

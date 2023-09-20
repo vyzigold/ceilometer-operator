@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -29,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,10 +50,11 @@ import (
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
 	secret "github.com/openstack-k8s-operators/lib-common/modules/common/secret"
 	util "github.com/openstack-k8s-operators/lib-common/modules/common/util"
-	mariadbv1 "github.com/openstack-k8s-operators/mariadb-operator/api/v1beta1"
 
+	memcachedv1 "github.com/openstack-k8s-operators/infra-operator/apis/memcached/v1beta1"
 	rabbitmqv1 "github.com/openstack-k8s-operators/infra-operator/apis/rabbitmq/v1beta1"
 	keystonev1 "github.com/openstack-k8s-operators/keystone-operator/api/v1beta1"
+	mariadbv1 "github.com/openstack-k8s-operators/mariadb-operator/api/v1beta1"
 	telemetryv1 "github.com/openstack-k8s-operators/telemetry-operator/api/v1beta1"
 	autoscaling "github.com/openstack-k8s-operators/telemetry-operator/pkg/autoscaling"
 	obov1 "github.com/rhobs/observability-operator/pkg/apis/monitoring/v1alpha1"
@@ -68,16 +71,20 @@ type AutoscalingReconciler struct {
 // +kubebuilder:rbac:groups=telemetry.openstack.org,resources=autoscalings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=telemetry.openstack.org,resources=autoscalings/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=telemetry.openstack.org,resources=autoscalings/finalizers,verbs=update
-// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list
-// +kubebuilder:rbac:groups=monitoring.rhobs,resources=monitoringstacks,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete;
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete;
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete;
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;create;update;patch;delete;watch
+// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list
 // +kubebuilder:rbac:groups=keystone.openstack.org,resources=keystoneservices,verbs=get;list;watch;create;update;patch;delete;
-// +kubebuilder:rbac:groups=rabbitmq.openstack.org,resources=transporturls,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=keystone.openstack.org,resources=keystoneapis,verbs=get;list;watch;
+// +kubebuilder:rbac:groups=keystone.openstack.org,resources=keystoneendpoints,verbs=get;list;watch;create;update;patch;delete;
+// +kubebuilder:rbac:groups=rabbitmq.openstack.org,resources=transporturls,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=mariadb.openstack.org,resources=mariadbdatabases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=monitoring.rhobs,resources=monitoringstacks,verbs=get;list;watch
+// +kubebuilder:rbac:groups=memcached.openstack.org,resources=memcacheds,verbs=get;list;watch;
 // service account, role, rolebinding
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;update
@@ -158,6 +165,7 @@ func (r *AutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			// Prometheus, Aodh, Heat conditions
 			condition.UnknownCondition("PrometheusReady", condition.InitReason, "PrometheusNotStarted"),
 			condition.UnknownCondition("HeatReady", condition.InitReason, "HeatNotStarted"),
+			condition.UnknownCondition(condition.MemcachedReadyCondition, condition.InitReason, condition.MemcachedReadyInitMessage),
 
 			condition.UnknownCondition(condition.ServiceConfigReadyCondition, condition.InitReason, condition.ServiceConfigReadyInitMessage),
 			condition.UnknownCondition(condition.DBReadyCondition, condition.InitReason, condition.DBReadyInitMessage),
@@ -354,6 +362,41 @@ func (r *AutoscalingReconciler) reconcileNormal(
 	// run check OpenStack secret - end
 
 	//
+	// Check for required memcached used for caching
+	//
+	memcached, err := r.getAutoscalingMemcached(ctx, helper, instance)
+	if err != nil {
+		if k8s_errors.IsNotFound(err) {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				condition.MemcachedReadyCondition,
+				condition.RequestedReason,
+				condition.SeverityInfo,
+				condition.MemcachedReadyWaitingMessage))
+			return ctrl.Result{RequeueAfter: time.Duration(10) * time.Second}, fmt.Errorf("memcached %s not found", instance.Spec.Aodh.MemcachedInstance)
+		}
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.MemcachedReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			condition.MemcachedReadyErrorMessage,
+			err.Error()))
+		return ctrl.Result{}, err
+	}
+
+	if !memcached.IsReady() {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			condition.MemcachedReadyCondition,
+			condition.RequestedReason,
+			condition.SeverityInfo,
+			condition.MemcachedReadyWaitingMessage))
+		return ctrl.Result{RequeueAfter: time.Duration(10) * time.Second}, fmt.Errorf("memcached %s is not ready", memcached.Name)
+	}
+	// Mark the Memcached Service as Ready if we get to this point with no errors
+	instance.Status.Conditions.MarkTrue(
+		condition.MemcachedReadyCondition, condition.MemcachedReadyMessage)
+	// run check memcached - end
+
+	//
 	// check for required TransportURL secret holding transport URL string
 	//
 	ctrlResult, err = r.getSecret(ctx, helper, instance, instance.Status.TransportURLSecret, &configMapVars)
@@ -368,7 +411,7 @@ func (r *AutoscalingReconciler) reconcileNormal(
 	// - %-config configmap holding minimal autoscaling config required to get the service up, user can add additional files to be added to the service
 	// - parameters which has passwords gets added from the OpenStack secret via the init container
 	//
-	err = r.generateServiceConfigMaps(ctx, helper, instance, &configMapVars)
+	err = r.generateServiceConfigMaps(ctx, helper, instance, &configMapVars, memcached)
 	if err != nil {
 		instance.Status.Conditions.Set(condition.FalseCondition(
 			condition.ServiceConfigReadyCondition,
@@ -435,6 +478,7 @@ func (r *AutoscalingReconciler) generateServiceConfigMaps(
 	h *helper.Helper,
 	instance *telemetryv1.Autoscaling,
 	envVars *map[string]env.Setter,
+	mc *memcachedv1.Memcached,
 ) error {
 
 	cmLabels := labels.GetLabels(instance, labels.GetGroupLabel(autoscaling.ServiceName), map[string]string{})
@@ -464,8 +508,12 @@ func (r *AutoscalingReconciler) generateServiceConfigMaps(
 	}
 
 	templateParameters := map[string]interface{}{
-		"KeystoneInternalURL": keystoneInternalURL,
-		"TransportURL":        string(transportURLSecret.Data["transport_url"]),
+		"AodhUser":                 instance.Spec.Aodh.ServiceUser,
+		"AodhPassword":             string(ospSecret.Data[instance.Spec.Aodh.PasswordSelectors.AodhService]),
+		"KeystoneInternalURL":      keystoneInternalURL,
+		"TransportURL":             string(transportURLSecret.Data["transport_url"]),
+		"MemcachedServers":         strings.Join(mc.Status.ServerList, ","),
+		"MemcachedServersWithInet": strings.Join(mc.Status.ServerListWithInet, ","),
 		"DatabaseConnection": fmt.Sprintf("mysql+pymysql://%s:%s@%s/%s",
 			instance.Spec.Aodh.DatabaseUser,
 			string(ospSecret.Data[instance.Spec.Aodh.PasswordSelectors.Database]),
@@ -495,6 +543,26 @@ func (r *AutoscalingReconciler) generateServiceConfigMaps(
 		},
 	}
 	return configmap.EnsureConfigMaps(ctx, h, instance, cms, envVars)
+}
+
+// getAutoscalingMemcached - gets the Memcached instance used for aodh cache backend
+func (r *AutoscalingReconciler) getAutoscalingMemcached(
+	ctx context.Context,
+	h *helper.Helper,
+	instance *telemetryv1.Autoscaling,
+) (*memcachedv1.Memcached, error) {
+	memcached := &memcachedv1.Memcached{}
+	err := h.GetClient().Get(
+		ctx,
+		types.NamespacedName{
+			Name:      instance.Spec.Aodh.MemcachedInstance,
+			Namespace: instance.Namespace,
+		},
+		memcached)
+	if err != nil {
+		return nil, err
+	}
+	return memcached, err
 }
 
 // getSecret - get the specified secret, and add its hash to envVars
@@ -595,40 +663,75 @@ func (r *AutoscalingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	err := r.Client.Get(context.Background(), client.ObjectKey{
 		Name: "monitoringstacks.monitoring.rhobs",
 	}, u)
+
+	memcachedFn := func(o client.Object) []reconcile.Request {
+		result := []reconcile.Request{}
+
+		// get all autoscaling CRs
+		autoscalings := &telemetryv1.AutoscalingList{}
+		listOpts := []client.ListOption{
+			client.InNamespace(o.GetNamespace()),
+		}
+		if err := r.Client.List(context.Background(), autoscalings, listOpts...); err != nil {
+			r.Log.Error(err, "Unable to retrieve Autoscaling CRs %w")
+			return nil
+		}
+
+		for _, cr := range autoscalings.Items {
+			if o.GetName() == cr.Spec.Aodh.MemcachedInstance {
+				name := client.ObjectKey{
+					Namespace: o.GetNamespace(),
+					Name:      cr.Name,
+				}
+				r.Log.Info(fmt.Sprintf("Memcached %s is used by Autoscaling CR %s", o.GetName(), cr.Name))
+				result = append(result, reconcile.Request{NamespacedName: name})
+			}
+		}
+		if len(result) > 0 {
+			return result
+		}
+		return nil
+	}
 	if err != nil {
 		return ctrl.NewControllerManagedBy(mgr).
 			For(&telemetryv1.Autoscaling{}).
-			Owns(&keystonev1.KeystoneService{}).
 			Owns(&appsv1.Deployment{}).
 			Owns(&corev1.ConfigMap{}).
 			Owns(&corev1.Service{}).
 			Owns(&corev1.Secret{}).
+			Owns(&corev1.ServiceAccount{}).
+			Owns(&keystonev1.KeystoneService{}).
+			Owns(&keystonev1.KeystoneEndpoint{}).
 			Owns(&mariadbv1.MariaDBDatabase{}).
 			Owns(&rabbitmqv1.TransportURL{}).
-			Owns(&corev1.ServiceAccount{}).
 			Owns(&rbacv1.Role{}).
 			Owns(&rbacv1.RoleBinding{}).
 			// Watch for TransportURL Secrets which belong to any TransportURLs created by Autoscaling CRs
 			Watches(&source.Kind{Type: &corev1.Secret{}},
 				handler.EnqueueRequestsFromMapFunc(transportURLSecretFn)).
+			Watches(&source.Kind{Type: &memcachedv1.Memcached{}},
+				handler.EnqueueRequestsFromMapFunc(memcachedFn)).
 			Complete(r)
 	}
-	// There is OBO installed and we can own MonitoringStack
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&telemetryv1.Autoscaling{}).
-		Owns(&obov1.MonitoringStack{}).
-		Owns(&keystonev1.KeystoneService{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.Secret{}).
+		Owns(&corev1.ServiceAccount{}).
+		Owns(&keystonev1.KeystoneService{}).
+		Owns(&keystonev1.KeystoneEndpoint{}).
 		Owns(&mariadbv1.MariaDBDatabase{}).
 		Owns(&rabbitmqv1.TransportURL{}).
-		Owns(&corev1.ServiceAccount{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
+		// There is OBO installed and we can own MonitoringStack
+		Owns(&obov1.MonitoringStack{}).
 		// Watch for TransportURL Secrets which belong to any TransportURLs created by Autoscaling CRs
 		Watches(&source.Kind{Type: &corev1.Secret{}},
 			handler.EnqueueRequestsFromMapFunc(transportURLSecretFn)).
+		Watches(&source.Kind{Type: &memcachedv1.Memcached{}},
+			handler.EnqueueRequestsFromMapFunc(memcachedFn)).
 		Complete(r)
 }

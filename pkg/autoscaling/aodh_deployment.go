@@ -26,7 +26,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	//"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	telemetryv1 "github.com/openstack-k8s-operators/telemetry-operator/api/v1beta1"
 )
@@ -44,31 +44,30 @@ func AodhDeployment(
 ) (*appsv1.Deployment, error) {
 	runAsUser := int64(0)
 
-	// TO-DO Probes
-	//	livenessProbe := &corev1.Probe{
-	//		// TODO might need tuning
-	//		TimeoutSeconds:      5,
-	//		PeriodSeconds:       3,
-	//		InitialDelaySeconds: 3,
-	//	}
-	//	readinessProbe := &corev1.Probe{
-	//		// TODO might need tuning
-	//		TimeoutSeconds:      5,
-	//		PeriodSeconds:       5,
-	//		InitialDelaySeconds: 5,
-	//	}
+	livenessProbe := &corev1.Probe{
+		// TODO might need tuning
+		TimeoutSeconds:      5,
+		PeriodSeconds:       3,
+		InitialDelaySeconds: 3,
+	}
+	readinessProbe := &corev1.Probe{
+		// TODO might need tuning
+		TimeoutSeconds:      5,
+		PeriodSeconds:       5,
+		InitialDelaySeconds: 5,
+	}
 
 	args := []string{"-c"}
 	args = append(args, ServiceCommand)
 
-	//	livenessProbe.HTTPGet = &corev1.HTTPGetAction{
-	//		Path: "/v3",
-	//		Port: intstr.IntOrString{Type: intstr.Int, IntVal: int32(CeilometerPrometheusPort)},
-	//	}
-	//	readinessProbe.HTTPGet = &corev1.HTTPGetAction{
-	//		Path: "/v3",
-	//		Port: intstr.IntOrString{Type: intstr.Int, IntVal: int32(CeilometerPrometheusPort)},
-	//	}
+	livenessProbe.HTTPGet = &corev1.HTTPGetAction{
+		Path: "/",
+		Port: intstr.IntOrString{Type: intstr.Int, IntVal: int32(AodhAPIPort)},
+	}
+	readinessProbe.HTTPGet = &corev1.HTTPGetAction{
+		Path: "/",
+		Port: intstr.IntOrString{Type: intstr.Int, IntVal: int32(AodhAPIPort)},
+	}
 
 	envVarsAodh := map[string]env.Setter{}
 	envVarsAodh["KOLLA_CONFIG_STRATEGY"] = env.SetValue("COPY_ALWAYS")

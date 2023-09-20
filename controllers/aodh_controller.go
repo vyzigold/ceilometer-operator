@@ -46,7 +46,9 @@ func (r *AutoscalingReconciler) reconcileDisabledAodh(
 	helper *helper.Helper,
 ) (ctrl.Result, error) {
 	r.Log.Info("Reconciling Service Aodh disabled")
-	//TODO: Fill in
+	r.reconcileDeleteAodh(ctx, instance, helper)
+	instance.Status.Conditions = condition.Conditions{}
+	instance.Status.Conditions.MarkTrue(condition.ReadyCondition, "Autoscaling disabled")
 	r.Log.Info(fmt.Sprintf("Reconciled Service Aodh '%s' disable successfully", autoscaling.ServiceName))
 	return ctrl.Result{}, nil
 }
@@ -127,7 +129,7 @@ func (r *AutoscalingReconciler) reconcileInitAodh(
 		Enabled:            true,
 		ServiceUser:        instance.Spec.Aodh.ServiceUser,
 		Secret:             instance.Spec.Aodh.Secret,
-		PasswordSelector:   instance.Spec.Aodh.PasswordSelectors.Service,
+		PasswordSelector:   instance.Spec.Aodh.PasswordSelectors.AodhService,
 	}
 
 	ksSvc := keystonev1.NewKeystoneService(ksSvcSpec, instance.Namespace, serviceLabels, 10)
