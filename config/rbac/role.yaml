@@ -151,8 +151,12 @@ rules:
   resources:
   - monitoringstacks
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - rabbitmq.openstack.org
@@ -184,6 +188,18 @@ rules:
   - create
   - get
   - list
+  - update
+  - watch
+- apiGroups:
+  - route.openshift.io
+  resources:
+  - routes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
   - update
   - watch
 - apiGroups:
