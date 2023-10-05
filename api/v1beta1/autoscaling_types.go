@@ -20,6 +20,8 @@ import (
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	heatv1 "github.com/openstack-k8s-operators/heat-operator/api/v1beta1"
+
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
 )
@@ -131,6 +133,16 @@ type APIOverrideSpec struct {
 	Service *service.RoutedOverrideSpec `json:"service,omitempty"`
 }
 
+type Heat struct {
+	// Heat instance name.
+	// +kubebuilder:default=heat
+	// +kubebuilder:validation=Required
+	InstanceName string `json:"instanceName"`
+
+	// If specified, a new heat instance will get deployed according to the specified template
+	Template *heatv1.HeatSpec `json:"template,omitempty"`
+}
+
 // AutoscalingSpec defines the desired state of Autoscaling
 type AutoscalingSpec struct {
 	// Specification of which prometheus to use for autoscaling
@@ -139,9 +151,8 @@ type AutoscalingSpec struct {
 	// Aodh spec
 	Aodh Aodh `json:"aodh,omitempty"`
 
-	// Heat instance name.
-	// +kubebuilder:default=heat
-	HeatInstance string `json:"heatInstance"`
+	// Specification of which heat to use for autoscaling
+	Heat Heat `json:"heat"`
 
 	// Allows enabling and disabling the autoscaling feature
 	// +kubebuilder:default=false

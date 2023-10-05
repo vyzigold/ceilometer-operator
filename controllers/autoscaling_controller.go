@@ -50,7 +50,6 @@ import (
 	secret "github.com/openstack-k8s-operators/lib-common/modules/common/secret"
 	util "github.com/openstack-k8s-operators/lib-common/modules/common/util"
 
-	heatv1 "github.com/openstack-k8s-operators/heat-operator/api/v1beta1"
 	memcachedv1 "github.com/openstack-k8s-operators/infra-operator/apis/memcached/v1beta1"
 	rabbitmqv1 "github.com/openstack-k8s-operators/infra-operator/apis/rabbitmq/v1beta1"
 	keystonev1 "github.com/openstack-k8s-operators/keystone-operator/api/v1beta1"
@@ -228,6 +227,12 @@ func (r *AutoscalingReconciler) reconcileDisabled(
 	} else if (ctrlResult != ctrl.Result{}) {
 		return ctrlResult, nil
 	}
+	ctrlResult, err = r.reconcileDisabledHeat(ctx, instance, helper)
+	if err != nil {
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
+	}
 	// Set the condition to true, since the service is disabled
 	for _, c := range instance.Status.Conditions {
 		instance.Status.Conditions.MarkTrue(c.Type, telemetryv1.AutoscalingReadyDisabledMessage)
@@ -255,6 +260,12 @@ func (r *AutoscalingReconciler) reconcileDelete(
 	} else if (ctrlResult != ctrl.Result{}) {
 		return ctrlResult, nil
 	}
+	ctrlResult, err = r.reconcileDeleteHeat(ctx, instance, helper)
+	if err != nil {
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
+	}
 	// Service is deleted so remove the finalizer.
 	controllerutil.RemoveFinalizer(instance, helper.GetFinalizer())
 	r.Log.Info(fmt.Sprintf("Reconciled Service '%s' delete successfully", autoscaling.ServiceName))
@@ -276,6 +287,12 @@ func (r *AutoscalingReconciler) reconcileInit(
 		return ctrlResult, nil
 	}
 	ctrlResult, err = r.reconcileInitAodh(ctx, instance, helper, serviceLabels)
+	if err != nil {
+		return ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
+	}
+	ctrlResult, err = r.reconcileInitHeat(ctx, instance, helper, serviceLabels)
 	if err != nil {
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
@@ -402,41 +419,6 @@ func (r *AutoscalingReconciler) reconcileNormal(
 	// run check memcached - end
 
 	//
-	// Check for required heat used for autoscaling
-	//
-	heat, err := r.getAutoscalingHeat(ctx, helper, instance)
-	if err != nil {
-		if k8s_errors.IsNotFound(err) {
-			instance.Status.Conditions.Set(condition.FalseCondition(
-				telemetryv1.HeatReadyCondition,
-				condition.RequestedReason,
-				condition.SeverityInfo,
-				telemetryv1.HeatReadyNotFoundMessage))
-			return ctrl.Result{RequeueAfter: time.Duration(10) * time.Second}, fmt.Errorf("heat %s not found", instance.Spec.HeatInstance)
-		}
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			telemetryv1.HeatReadyCondition,
-			condition.ErrorReason,
-			condition.SeverityWarning,
-			telemetryv1.HeatReadyErrorMessage,
-			err.Error()))
-		return ctrl.Result{}, err
-	}
-
-	if !heat.IsReady() {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			telemetryv1.HeatReadyCondition,
-			condition.RequestedReason,
-			condition.SeverityInfo,
-			telemetryv1.HeatReadyUnreadyMessage))
-		return ctrl.Result{RequeueAfter: time.Duration(10) * time.Second}, fmt.Errorf("heat %s is not ready", heat.Name)
-	}
-	// Mark the Heat Service as Ready if we get to this point with no errors
-	instance.Status.Conditions.MarkTrue(
-		telemetryv1.HeatReadyCondition, condition.ReadyMessage)
-	// run check heat - end
-
-	//
 	// check for required TransportURL secret holding transport URL string
 	//
 	ctrlResult, err = r.getSecret(ctx, helper, instance, instance.Status.TransportURLSecret, &configMapVars)
@@ -494,6 +476,13 @@ func (r *AutoscalingReconciler) reconcileNormal(
 		return ctrlResult, err
 	}
 	ctrlResult, err = r.reconcileNormalAodh(ctx, instance, helper, inputHash)
+	if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
+	}
+	if err != nil {
+		return ctrlResult, err
+	}
+	ctrlResult, err = r.reconcileNormalHeat(ctx, instance, helper)
 	if (ctrlResult != ctrl.Result{}) {
 		return ctrlResult, nil
 	}
@@ -619,25 +608,6 @@ func (r *AutoscalingReconciler) getAutoscalingMemcached(
 		return nil, err
 	}
 	return memcached, err
-}
-
-func (r *AutoscalingReconciler) getAutoscalingHeat(
-	ctx context.Context,
-	h *helper.Helper,
-	instance *telemetryv1.Autoscaling,
-) (*heatv1.Heat, error) {
-	heat := &heatv1.Heat{}
-	err := h.GetClient().Get(
-		ctx,
-		types.NamespacedName{
-			Name:      instance.Spec.HeatInstance,
-			Namespace: instance.Namespace,
-		},
-		heat)
-	if err != nil {
-		return nil, err
-	}
-	return heat, err
 }
 
 // getSecret - get the specified secret, and add its hash to envVars

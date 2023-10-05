@@ -11,7 +11,7 @@ metadata:
 spec:
   enabled: true
   prometheus:
-    deployPrometheus: false
+    deployPrometheus: true
   aodh:
     secret: osp-secret
     apiImage: "quay.io/podified-antelope-centos9/openstack-aodh-api:current-podified"
@@ -22,3 +22,42 @@ spec:
     databaseUser: aodh
     databaseInstance: openstack
     memcachedInstance: memcached
+  heat:
+    instanceName: heat
+    template:
+      customServiceConfig: ""
+      databaseInstance: openstack
+      databaseUser: "heat"
+      debug:
+        dbSync: true
+      heatAPI:
+        containerImage: "quay.io/podified-antelope-centos9/openstack-heat-api:current-podified"
+        customServiceConfig: ""
+        debug:
+          service: true
+        replicas: 1
+        resources: {}
+      heatCfnAPI:
+        containerImage: "quay.io/podified-antelope-centos9/openstack-heat-api-cfn:current-podified"
+        customServiceConfig: ""
+        debug:
+          service: true
+        replicas: 1
+        resources: {}
+      heatEngine:
+        containerImage: "quay.io/podified-antelope-centos9/openstack-heat-engine:current-podified"
+        customServiceConfig: ""
+        debug:
+          service: true
+        replicas: 1
+        resources: {}
+      memcachedInstance: memcached
+      preserveJobs: true
+      rabbitMqClusterName: rabbitmq
+      secret: osp-secret
+      serviceUser: "heat"
+      passwordSelectors:
+        authEncryptionKey: HeatAuthEncryptionKey
+        database: HeatDatabasePassword
+        service: HeatPassword
+

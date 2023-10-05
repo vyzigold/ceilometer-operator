@@ -307,10 +307,421 @@ spec:
                 default: false
                 description: Allows enabling and disabling the autoscaling feature
                 type: boolean
-              heatInstance:
-                default: heat
-                description: Heat instance name.
-                type: string
+              heat:
+                description: Specification of which heat to use for autoscaling
+                properties:
+                  instanceName:
+                    default: heat
+                    description: Heat instance name.
+                    type: string
+                  template:
+                    description: If specified, a new heat instance will get deployed
+                      according to the specified template
+                    properties:
+                      customServiceConfig:
+                        default: '# add your customization here'
+                        description: CustomServiceConfig - customize the service config
+                          using this parameter to change service defaults, or overwrite
+                          rendered information using raw OpenStack config format.
+                          The content gets added to to /etc/<service>/<service>.conf.d
+                          directory as custom.conf file.
+                        type: string
+                      databaseInstance:
+                        description: MariaDB instance name. Right now required by
+                          the maridb-operator to get the credentials from the instance
+                          to create the DB. Might not be required in future.
+                        type: string
+                      databaseUser:
+                        default: heat
+                        description: 'DatabaseUser - optional username used for heat
+                          DB, defaults to heat. TODO: -> implement needs work in mariadb-operator,
+                          right now only heat.'
+                        type: string
+                      debug:
+                        description: Debug - enable debug for different deploy stages.
+                          If an init container is used, it runs and the actual action
+                          pod gets started with sleep infinity
+                        properties:
+                          dbSync:
+                            default: false
+                            description: DBSync enable debug
+                            type: boolean
+                        type: object
+                      defaultConfigOverwrite:
+                        additionalProperties:
+                          type: string
+                        description: 'ConfigOverwrite - interface to overwrite default
+                          config files like e.g. policy.json. But can also be used
+                          to add additional files. Those get added to the service
+                          config dir in /etc/<service> . TODO: -> implement'
+                        type: object
+                      heatAPI:
+                        description: HeatAPI - Spec definition for the API service
+                          of this Heat deployment
+                        properties:
+                          containerImage:
+                            description: ContainerImage - Container Image URL
+                            type: string
+                          customServiceConfig:
+                            default: '# add your customization here'
+                            description: CustomServiceConfig - customize the service
+                              config using this parameter to change service defaults,
+                              or overwrite rendered information using raw OpenStack
+                              config format. The content gets added to to /etc/<service>/<service>.conf.d
+                              directory as custom.conf file.
+                            type: string
+                          debug:
+                            description: Debug - enable debug for different deploy
+                              stages. If an init container is used, it runs and the
+                              actual action pod gets started with sleep infinity
+                            properties:
+                              service:
+                                default: false
+                                description: Service enable debug
+                                type: boolean
+                            type: object
+                          defaultConfigOverwrite:
+                            additionalProperties:
+                              type: string
+                            description: 'ConfigOverwrite - interface to overwrite
+                              default config files like e.g. policy.json. But can
+                              also be used to add additional files. Those get added
+                              to the service config dir in /etc/<service> . TODO:
+                              -> implement'
+                            type: object
+                          nodeSelector:
+                            additionalProperties:
+                              type: string
+                            description: NodeSelector to target subset of worker nodes
+                              for running the service
+                            type: object
+                          replicas:
+                            default: 1
+                            description: Replicas -
+                            format: int32
+                            maximum: 32
+                            minimum: 0
+                            type: integer
+                          resources:
+                            description: Resources - Compute Resources required by
+                              this service (Limits/Requests). https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                            properties:
+                              claims:
+                                description: "Claims lists the names of resources,
+                                  defined in spec.resourceClaims, that are used by
+                                  this container. \n This is an alpha field and requires
+                                  enabling the DynamicResourceAllocation feature gate.
+                                  \n This field is immutable. It can only be set for
+                                  containers."
+                                items:
+                                  description: ResourceClaim references one entry
+                                    in PodSpec.ResourceClaims.
+                                  properties:
+                                    name:
+                                      description: Name must match the name of one
+                                        entry in pod.spec.resourceClaims of the Pod
+                                        where this field is used. It makes that resource
+                                        available inside a container.
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - name
+                                x-kubernetes-list-type: map
+                              limits:
+                                additionalProperties:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                description: 'Limits describes the maximum amount
+                                  of compute resources allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                type: object
+                              requests:
+                                additionalProperties:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                description: 'Requests describes the minimum amount
+                                  of compute resources required. If Requests is omitted
+                                  for a container, it defaults to Limits if that is
+                                  explicitly specified, otherwise to an implementation-defined
+                                  value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                type: object
+                            type: object
+                        required:
+                        - containerImage
+                        type: object
+                      heatCfnAPI:
+                        description: HeatCfnAPI - Spec definition for the CfnAPI service
+                          of this Heat deployment
+                        properties:
+                          containerImage:
+                            description: ContainerImage - Container Image URL
+                            type: string
+                          customServiceConfig:
+                            default: '# add your customization here'
+                            description: CustomServiceConfig - customize the service
+                              config using this parameter to change service defaults,
+                              or overwrite rendered information using raw OpenStack
+                              config format. The content gets added to to /etc/<service>/<service>.conf.d
+                              directory as custom.conf file.
+                            type: string
+                          debug:
+                            description: Debug - enable debug for different deploy
+                              stages. If an init container is used, it runs and the
+                              actual action pod gets started with sleep infinity
+                            properties:
+                              service:
+                                default: false
+                                description: Service enable debug
+                                type: boolean
+                            type: object
+                          defaultConfigOverwrite:
+                            additionalProperties:
+                              type: string
+                            description: 'ConfigOverwrite - interface to overwrite
+                              default config files like e.g. policy.json. But can
+                              also be used to add additional files. Those get added
+                              to the service config dir in /etc/<service> . TODO:
+                              -> implement'
+                            type: object
+                          nodeSelector:
+                            additionalProperties:
+                              type: string
+                            description: NodeSelector to target subset of worker nodes
+                              for running the service
+                            type: object
+                          replicas:
+                            default: 1
+                            description: Replicas -
+                            format: int32
+                            maximum: 32
+                            minimum: 0
+                            type: integer
+                          resources:
+                            description: Resources - Compute Resources required by
+                              this service (Limits/Requests). https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                            properties:
+                              claims:
+                                description: "Claims lists the names of resources,
+                                  defined in spec.resourceClaims, that are used by
+                                  this container. \n This is an alpha field and requires
+                                  enabling the DynamicResourceAllocation feature gate.
+                                  \n This field is immutable. It can only be set for
+                                  containers."
+                                items:
+                                  description: ResourceClaim references one entry
+                                    in PodSpec.ResourceClaims.
+                                  properties:
+                                    name:
+                                      description: Name must match the name of one
+                                        entry in pod.spec.resourceClaims of the Pod
+                                        where this field is used. It makes that resource
+                                        available inside a container.
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - name
+                                x-kubernetes-list-type: map
+                              limits:
+                                additionalProperties:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                description: 'Limits describes the maximum amount
+                                  of compute resources allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                type: object
+                              requests:
+                                additionalProperties:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                description: 'Requests describes the minimum amount
+                                  of compute resources required. If Requests is omitted
+                                  for a container, it defaults to Limits if that is
+                                  explicitly specified, otherwise to an implementation-defined
+                                  value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                type: object
+                            type: object
+                        required:
+                        - containerImage
+                        type: object
+                      heatEngine:
+                        description: HeatEngine - Spec definition for the Engine service
+                          of this Heat deployment
+                        properties:
+                          containerImage:
+                            description: ContainerImage - Container Image URL
+                            type: string
+                          customServiceConfig:
+                            default: '# add your customization here'
+                            description: CustomServiceConfig - customize the service
+                              config using this parameter to change service defaults,
+                              or overwrite rendered information using raw OpenStack
+                              config format. The content gets added to to /etc/<service>/<service>.conf.d
+                              directory as custom.conf file.
+                            type: string
+                          debug:
+                            description: Debug - enable debug for different deploy
+                              stages. If an init container is used, it runs and the
+                              actual action pod gets started with sleep infinity
+                            properties:
+                              service:
+                                default: false
+                                description: Service enable debug
+                                type: boolean
+                            type: object
+                          defaultConfigOverwrite:
+                            additionalProperties:
+                              type: string
+                            description: 'ConfigOverwrite - interface to overwrite
+                              default config files like e.g. policy.json. But can
+                              also be used to add additional files. Those get added
+                              to the service config dir in /etc/<service> . TODO:
+                              -> implement'
+                            type: object
+                          nodeSelector:
+                            additionalProperties:
+                              type: string
+                            description: NodeSelector to target subset of worker nodes
+                              for running the service
+                            type: object
+                          replicas:
+                            default: 1
+                            description: Replicas -
+                            format: int32
+                            maximum: 32
+                            minimum: 0
+                            type: integer
+                          resources:
+                            description: Resources - Compute Resources required by
+                              this service (Limits/Requests). https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                            properties:
+                              claims:
+                                description: "Claims lists the names of resources,
+                                  defined in spec.resourceClaims, that are used by
+                                  this container. \n This is an alpha field and requires
+                                  enabling the DynamicResourceAllocation feature gate.
+                                  \n This field is immutable. It can only be set for
+                                  containers."
+                                items:
+                                  description: ResourceClaim references one entry
+                                    in PodSpec.ResourceClaims.
+                                  properties:
+                                    name:
+                                      description: Name must match the name of one
+                                        entry in pod.spec.resourceClaims of the Pod
+                                        where this field is used. It makes that resource
+                                        available inside a container.
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - name
+                                x-kubernetes-list-type: map
+                              limits:
+                                additionalProperties:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                description: 'Limits describes the maximum amount
+                                  of compute resources allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                type: object
+                              requests:
+                                additionalProperties:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                description: 'Requests describes the minimum amount
+                                  of compute resources required. If Requests is omitted
+                                  for a container, it defaults to Limits if that is
+                                  explicitly specified, otherwise to an implementation-defined
+                                  value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                type: object
+                            type: object
+                        required:
+                        - containerImage
+                        type: object
+                      nodeSelector:
+                        additionalProperties:
+                          type: string
+                        description: NodeSelector to target subset of worker nodes
+                          for running the Heat services
+                        type: object
+                      passwordSelectors:
+                        default:
+                          authEncryptionKey: HeatAuthEncryptionKey
+                          database: HeatDatabasePassword
+                          service: HeatPassword
+                        description: PasswordSelectors - Selectors to identify the
+                          DB and ServiceUser password from the Secret
+                        properties:
+                          authEncryptionKey:
+                            default: HeatAuthEncryptionKey
+                            description: AuthEncryptionKey - Selector to get the heat
+                              auth encryption key from the Secret
+                            type: string
+                          database:
+                            default: HeatDatabasePassword
+                            description: 'Database - Selector to get the heat Database
+                              user password from the Secret TODO: not used, need change
+                              in mariadb-operator'
+                            type: string
+                          service:
+                            default: HeatPassword
+                            description: Service - Selector to get the heat service
+                              password from the Secret
+                            type: string
+                        type: object
+                      preserveJobs:
+                        default: false
+                        description: PreserveJobs - do not delete jobs after they
+                          finished e.g. to check logs
+                        type: boolean
+                      rabbitMqClusterName:
+                        default: rabbitmq
+                        description: RabbitMQ instance name Needed to request a transportURL
+                          that is created and used in Heat
+                        type: string
+                      secret:
+                        description: Secret containing OpenStack password information
+                          for heat HeatDatabasePassword, HeatPassword and HeatAuthEncryptionKey
+                        type: string
+                      serviceUser:
+                        default: heat
+                        description: ServiceUser - optional username used for this
+                          service to register in heat
+                        type: string
+                    required:
+                    - databaseInstance
+                    - heatAPI
+                    - heatCfnAPI
+                    - heatEngine
+                    - rabbitMqClusterName
+                    - secret
+                    type: object
+                required:
+                - instanceName
+                type: object
               prometheus:
                 description: Specification of which prometheus to use for autoscaling
                 properties:
@@ -331,7 +742,7 @@ spec:
                     type: integer
                 type: object
             required:
-            - heatInstance
+            - heat
             type: object
           status:
             description: AutoscalingStatus defines the observed state of Autoscaling
