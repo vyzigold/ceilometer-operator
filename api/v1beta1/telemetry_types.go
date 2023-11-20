@@ -21,6 +21,7 @@ import (
 
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
+	obov1 "github.com/rhobs/observability-operator/pkg/apis/monitoring/v1alpha1"
 )
 
 // TODO: We might want to split this to aodh and ceilometer and move it to appropriate files
@@ -52,6 +53,10 @@ type TelemetrySpec struct {
 	// +kubebuilder:validation:Optional
 	// Ceilometer - Parameters related to the ceilometer service
 	Ceilometer CeilometerSection `json:"ceilometer,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// Prometheus - Parameters related to the ceilometer service
+	Prometheus PrometheusSection `json:"prometheus,omitempty"`
 
 	// Secret containing OpenStack password information for telemetry services
         // +kubebuilder:validation:Required
@@ -85,6 +90,20 @@ type AutoscalingSection struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	// Template - Overrides to use when creating the OpenStack autoscaling service
 	AutoscalingSpec `json:",inline"`
+}
+
+// PrometheusSection defines the desired state of the autoscaling service
+type PrometheusSection struct {
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=false
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,xDescriptors={"urn:alm:descriptor:com.tectonic.ui:booleanSwitch"}
+	// Enabled - Whether OpenStack autoscaling service should be deployed and managed
+	Enabled bool `json:"enabled"`
+
+	// +kubebuilder:validation:Optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	// Template - Overrides to use when creating the OpenStack prometheus service
+	Template obov1.MonitoringStack `json:"template,omitempty"`
 }
 
 // TelemetryStatus defines the observed state of Telemetry

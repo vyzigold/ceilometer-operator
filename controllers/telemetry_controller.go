@@ -60,6 +60,7 @@ func (r *TelemetryReconciler) GetLogger(ctx context.Context) logr.Logger {
 // +kubebuilder:rbac:groups=telemetry.openstack.org,resources=ceilometers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=telemetry.openstack.org,resources=ceilometers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=telemetry.openstack.org,resources=ceilometers/finalizers,verbs=update;delete
+// +kubebuilder:rbac:groups=monitoring.rhobs,resources=monitoringstacks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rabbitmq.openstack.org,resources=transporturls,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile reconciles a Telemetry
@@ -195,6 +196,13 @@ func (r *TelemetryReconciler) reconcileNormal(ctx context.Context, instance *tel
 	}
 
 	ctrlResult, err = reconcileCeilometer(ctx, instance, helper)
+	if err != nil {
+		return ctrl.Result{}, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return ctrlResult, nil
+	}
+
+	ctrlResult, err = reconcilePrometheus(ctx, instance, helper)
 	if err != nil {
 		return ctrl.Result{}, err
 	} else if (ctrlResult != ctrl.Result{}) {
@@ -349,11 +357,75 @@ func reconcileAutoscaling(ctx context.Context, instance *telemetryv1.Telemetry, 
 	return ctrl.Result{}, nil
 }
 
+// reconcilePrometheus ...
+func reconcilePrometheus(ctx context.Context, instance *telemetryv1.Telemetry, helper *helper.Helper) (ctrl.Result, error) {
+	const (
+		prometheusNamespaceLabel = "Prometheus.Namespace"
+		prometheusNameLabel      = "Prometheus.Name"
+		prometheusName           = "prometheus"
+	)
+	prometheusInstance := &telemetryv1.Prometheus{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      prometheusName,
+			Namespace: instance.Namespace,
+		},
+	}
+
+	if !instance.Spec.Prometheus.Enabled {
+		if res, err := ensureDeleted(ctx, helper, prometheusInstance); err != nil {
+			return res, err
+		}
+		instance.Status.Conditions.Remove(telemetryv1.PrometheusReadyCondition)
+		return ctrl.Result{}, nil
+	}
+
+	helper.GetLogger().Info("Reconciling Prometheus", prometheusNamespaceLabel, instance.Namespace, prometheusNameLabel, prometheusName)
+	op, err := controllerutil.CreateOrPatch(ctx, helper.GetClient(), prometheusInstance, func() error {
+		instance.Spec.Prometheus.Template.DeepCopyInto(&prometheusInstance.Spec)
+
+		if prometheusInstance.Spec.Aodh.Secret == "" {
+			prometheusInstance.Spec.Aodh.Secret = instance.Spec.Secret
+		}
+
+		err := controllerutil.SetControllerReference(helper.GetBeforeObject(), prometheusInstance, helper.GetScheme())
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			telemetryv1.PrometheusReadyCondition,
+			condition.ErrorReason,
+			condition.SeverityWarning,
+			telemetryv1.PrometheusReadyErrorMessage,
+			err.Error()))
+		return ctrl.Result{}, err
+	}
+	if op != controllerutil.OperationResultNone {
+		helper.GetLogger().Info(fmt.Sprintf("%s %s - %s", prometheusName, prometheusInstance.Name, op))
+	}
+
+	if prometheusInstance.IsReady() {
+		instance.Status.Conditions.MarkTrue(telemetryv1.PrometheusReadyCondition, telemetryv1.PrometheusReadyMessage)
+	} else {
+		instance.Status.Conditions.Set(condition.FalseCondition(
+			telemetryv1.PrometheusReadyCondition,
+			condition.RequestedReason,
+			condition.SeverityInfo,
+			telemetryv1.PrometheusReadyRunningMessage))
+	}
+
+	return ctrl.Result{}, nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *TelemetryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&telemetryv1.Telemetry{}).
 		Owns(&telemetryv1.Ceilometer{}).
 		Owns(&telemetryv1.Autoscaling{}).
+		Owns(&obov1.MonitoringStack{}).
 		Complete(r)
 }
