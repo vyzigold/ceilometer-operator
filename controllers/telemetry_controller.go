@@ -34,6 +34,8 @@ import (
 	helper "github.com/openstack-k8s-operators/lib-common/modules/common/helper"
 	"k8s.io/client-go/kubernetes"
 
+	obov1 "github.com/rhobs/observability-operator/pkg/apis/monitoring/v1alpha1"
+
 	telemetryv1 "github.com/openstack-k8s-operators/telemetry-operator/api/v1beta1"
 	ceilometer "github.com/openstack-k8s-operators/telemetry-operator/pkg/ceilometer"
 	telemetry "github.com/openstack-k8s-operators/telemetry-operator/pkg/telemetry"
@@ -364,7 +366,7 @@ func reconcilePrometheus(ctx context.Context, instance *telemetryv1.Telemetry, h
 		prometheusNameLabel      = "Prometheus.Name"
 		prometheusName           = "prometheus"
 	)
-	prometheusInstance := &telemetryv1.Prometheus{
+	prometheusInstance := &obov1.MonitoringStack{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      prometheusName,
 			Namespace: instance.Namespace,
@@ -381,11 +383,7 @@ func reconcilePrometheus(ctx context.Context, instance *telemetryv1.Telemetry, h
 
 	helper.GetLogger().Info("Reconciling Prometheus", prometheusNamespaceLabel, instance.Namespace, prometheusNameLabel, prometheusName)
 	op, err := controllerutil.CreateOrPatch(ctx, helper.GetClient(), prometheusInstance, func() error {
-		instance.Spec.Prometheus.Template.DeepCopyInto(&prometheusInstance.Spec)
-
-		if prometheusInstance.Spec.Aodh.Secret == "" {
-			prometheusInstance.Spec.Aodh.Secret = instance.Spec.Secret
-		}
+		instance.Spec.Prometheus.MonitoringStackSpec.DeepCopyInto(&prometheusInstance.Spec)
 
 		err := controllerutil.SetControllerReference(helper.GetBeforeObject(), prometheusInstance, helper.GetScheme())
 		if err != nil {
@@ -406,17 +404,17 @@ func reconcilePrometheus(ctx context.Context, instance *telemetryv1.Telemetry, h
 	if op != controllerutil.OperationResultNone {
 		helper.GetLogger().Info(fmt.Sprintf("%s %s - %s", prometheusName, prometheusInstance.Name, op))
 	}
-
-	if prometheusInstance.IsReady() {
-		instance.Status.Conditions.MarkTrue(telemetryv1.PrometheusReadyCondition, telemetryv1.PrometheusReadyMessage)
-	} else {
-		instance.Status.Conditions.Set(condition.FalseCondition(
-			telemetryv1.PrometheusReadyCondition,
-			condition.RequestedReason,
-			condition.SeverityInfo,
-			telemetryv1.PrometheusReadyRunningMessage))
-	}
-
+	/*
+		if prometheusInstance.IsReady() {
+			instance.Status.Conditions.MarkTrue(telemetryv1.PrometheusReadyCondition, telemetryv1.PrometheusReadyMessage)
+		} else {
+			instance.Status.Conditions.Set(condition.FalseCondition(
+				telemetryv1.PrometheusReadyCondition,
+				condition.RequestedReason,
+				condition.SeverityInfo,
+				telemetryv1.PrometheusReadyRunningMessage))
+		}
+	*/
 	return ctrl.Result{}, nil
 }
 

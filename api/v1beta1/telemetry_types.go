@@ -103,7 +103,7 @@ type PrometheusSection struct {
 	// +kubebuilder:validation:Optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	// Template - Overrides to use when creating the OpenStack prometheus service
-	Template obov1.MonitoringStack `json:"template,omitempty"`
+	obov1.MonitoringStackSpec `json:",inline"`
 }
 
 // TelemetryStatus defines the observed state of Telemetry
