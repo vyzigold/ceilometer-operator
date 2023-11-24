@@ -32,6 +32,7 @@ import (
 
 	telemetryv1 "github.com/openstack-k8s-operators/telemetry-operator/api/v1beta1"
 	autoscaling "github.com/openstack-k8s-operators/telemetry-operator/pkg/autoscaling"
+	prometheus "github.com/openstack-k8s-operators/telemetry-operator/pkg/prometheus"
 )
 
 func (r *AutoscalingReconciler) reconcileDeletePrometheus(
@@ -66,7 +67,7 @@ func (r *AutoscalingReconciler) reconcileNormalPrometheus(
 	serviceLabels := map[string]string{
 		common.AppSelector: autoscaling.ServiceName,
 	}
-	prom := autoscaling.Prometheus(instance, serviceLabels)
+	prom := prometheus.MonitoringStack(instance.Name, instance.Namespace, serviceLabels, true, 1, "5h")
 	Log.Info(fmt.Sprintf("Reconciling Service Aodh '%s'", prom.Name))
 
 	var promHost string
