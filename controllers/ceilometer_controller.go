@@ -26,7 +26,9 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,6 +54,9 @@ import (
 	keystonev1 "github.com/openstack-k8s-operators/keystone-operator/api/v1beta1"
 	telemetryv1 "github.com/openstack-k8s-operators/telemetry-operator/api/v1beta1"
 	ceilometer "github.com/openstack-k8s-operators/telemetry-operator/pkg/ceilometer"
+	prometheus "github.com/openstack-k8s-operators/telemetry-operator/pkg/prometheus"
+	monv1 "github.com/rhobs/obo-prometheus-operator/pkg/apis/monitoring/v1"
+	obov1 "github.com/rhobs/observability-operator/pkg/apis/monitoring/v1alpha1"
 )
 
 // CeilometerReconciler reconciles a Ceilometer object
@@ -454,6 +459,30 @@ func (r *CeilometerReconciler) reconcileNormal(ctx context.Context, instance *te
 		return ctrl.Result{}, err
 	}
 
+	prom := prometheus.MonitoringStack(instance.Name, instance.Namespace, serviceLabels, false, 1, "24h")
+	ctrlResult, err = reconcileNormalPrometheus(ctx, instance, prom, instance.Status.Conditions, helper, instance.Spec.DeployMonitoringStack)
+
+	nodeExporterLabels := make(map[string]string)
+	nodeExporterLabels["kubernetes.io/service-name"] = "node-exporter"
+
+	serviceMonitors := []*monv1.ServiceMonitor{}
+	serviceMonitors = append(serviceMonitors, prometheus.ServiceMonitor(instance.Name+"-ceilometer", instance.Namespace, serviceLabels, serviceLabels, "30s"))
+	serviceMonitors = append(serviceMonitors, prometheus.ServiceMonitor(instance.Name+"-node-exporter", instance.Namespace, serviceLabels, nodeExporterLabels, "30s"))
+
+	for _, monitor := range serviceMonitors {
+		op, err := controllerutil.CreateOrUpdate(ctx, helper.GetClient(), monitor, func() error {
+			err := controllerutil.SetControllerReference(instance, monitor, helper.GetScheme())
+			return err
+		})
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if op != controllerutil.OperationResultNone {
+			Log.Info(fmt.Sprintf("Service monitor %s successfully reconciled - operation: %s", monitor.Name, string(op)))
+		}
+
+	}
+
 	Log.Info("Reconciled Service successfully")
 	return ctrl.Result{}, nil
 }
@@ -689,18 +718,47 @@ func (r *CeilometerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Ma
 		return nil
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&telemetryv1.Ceilometer{}).
-		Owns(&keystonev1.KeystoneService{}).
-		Owns(&appsv1.Deployment{}).
-		Owns(&corev1.ConfigMap{}).
-		Owns(&corev1.Service{}).
-		Owns(&rabbitmqv1.TransportURL{}).
-		Owns(&corev1.ServiceAccount{}).
-		Owns(&rbacv1.Role{}).
-		Owns(&rbacv1.RoleBinding{}).
-		// Watch for TransportURL Secrets which belong to any TransportURLs created by Ceilometer CRs
-		Watches(&source.Kind{Type: &corev1.Secret{}},
-			handler.EnqueueRequestsFromMapFunc(transportURLSecretFn)).
-		Complete(r)
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "apiextensions.k8s.io",
+		Kind:    "CustomResourceDefinition",
+		Version: "v1",
+	})
+	err := r.Client.Get(context.Background(), client.ObjectKey{
+		Name: "monitoringstacks.monitoring.rhobs",
+	}, u)
+
+	if err != nil {
+		return ctrl.NewControllerManagedBy(mgr).
+			For(&telemetryv1.Ceilometer{}).
+			Owns(&keystonev1.KeystoneService{}).
+			Owns(&appsv1.Deployment{}).
+			Owns(&corev1.ConfigMap{}).
+			Owns(&corev1.Service{}).
+			Owns(&rabbitmqv1.TransportURL{}).
+			Owns(&corev1.ServiceAccount{}).
+			Owns(&rbacv1.Role{}).
+			Owns(&rbacv1.RoleBinding{}).
+			// Watch for TransportURL Secrets which belong to any TransportURLs created by Ceilometer CRs
+			Watches(&source.Kind{Type: &corev1.Secret{}},
+				handler.EnqueueRequestsFromMapFunc(transportURLSecretFn)).
+			Complete(r)
+	} else {
+		return ctrl.NewControllerManagedBy(mgr).
+			For(&telemetryv1.Ceilometer{}).
+			Owns(&keystonev1.KeystoneService{}).
+			Owns(&appsv1.Deployment{}).
+			Owns(&corev1.ConfigMap{}).
+			Owns(&corev1.Service{}).
+			Owns(&rabbitmqv1.TransportURL{}).
+			Owns(&corev1.ServiceAccount{}).
+			Owns(&rbacv1.Role{}).
+			Owns(&rbacv1.RoleBinding{}).
+			Owns(&obov1.MonitoringStack{}).
+			Owns(&monv1.ServiceMonitor{}).
+			// Watch for TransportURL Secrets which belong to any TransportURLs created by Ceilometer CRs
+			Watches(&source.Kind{Type: &corev1.Secret{}},
+				handler.EnqueueRequestsFromMapFunc(transportURLSecretFn)).
+			Complete(r)
+	}
 }

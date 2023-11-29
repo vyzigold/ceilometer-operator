@@ -371,6 +371,11 @@ spec:
                       also be used to add additional files. Those get added to the
                       service config dir in /etc/<service> . TODO: -> implement'
                     type: object
+                  deployMonitoringStack:
+                    default: false
+                    description: Enables the deployment of MonitoringStack for metric
+                      storage and alerting
+                    type: boolean
                   enabled:
                     default: true
                     description: Enabled - Whether OpenStack Ceilometer service should

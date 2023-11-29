@@ -73,6 +73,10 @@ type CeilometerSpec struct {
 	// NetworkAttachmentDefinitions list of network attachment definitions the service pod gets attached to
 	NetworkAttachmentDefinitions []string `json:"networkAttachmentDefinitions,omitempty"`
 
+	// Enables the deployment of MonitoringStack for metric storage and alerting
+	// +kubebuilder:default=false
+	DeployMonitoringStack bool `json:"deployMonitoringStack,omitempty"`
+
 	// +kubebuilder:validation:Required
 	CentralImage string `json:"centralImage"`
 

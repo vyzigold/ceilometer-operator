@@ -44,10 +44,9 @@ func MonitoringStack(
 			PrometheusConfig: &obov1.PrometheusConfig{
 				Replicas: &prometheusReplicas,
 			},
-			Retention: monv1.Duration(prometheusRetention),
-			ResourceSelector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
+			Retention:         monv1.Duration(prometheusRetention),
+			NamespaceSelector: &metav1.LabelSelector{},
+			ResourceSelector:  &metav1.LabelSelector{},
 		},
 	}
 	return monitoringStack

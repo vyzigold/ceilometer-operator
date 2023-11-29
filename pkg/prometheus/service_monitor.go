@@ -26,6 +26,7 @@ func ServiceMonitor(
 	name string,
 	namespace string,
 	labels map[string]string,
+	selector map[string]string,
 	scrape_interval string,
 ) *monv1.ServiceMonitor {
 	serviceMonitor := &monv1.ServiceMonitor{
@@ -68,7 +69,7 @@ func ServiceMonitor(
 				},
 			},
 			Selector: metav1.LabelSelector{
-				MatchLabels: labels,
+				MatchLabels: selector,
 			},
 		},
 	}

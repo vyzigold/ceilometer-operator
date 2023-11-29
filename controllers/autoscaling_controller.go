@@ -49,6 +49,7 @@ import (
 	labels "github.com/openstack-k8s-operators/lib-common/modules/common/labels"
 	common_rbac "github.com/openstack-k8s-operators/lib-common/modules/common/rbac"
 	secret "github.com/openstack-k8s-operators/lib-common/modules/common/secret"
+	service "github.com/openstack-k8s-operators/lib-common/modules/common/service"
 	util "github.com/openstack-k8s-operators/lib-common/modules/common/util"
 
 	heatv1 "github.com/openstack-k8s-operators/heat-operator/api/v1beta1"
@@ -58,6 +59,7 @@ import (
 	mariadbv1 "github.com/openstack-k8s-operators/mariadb-operator/api/v1beta1"
 	telemetryv1 "github.com/openstack-k8s-operators/telemetry-operator/api/v1beta1"
 	autoscaling "github.com/openstack-k8s-operators/telemetry-operator/pkg/autoscaling"
+	prometheus "github.com/openstack-k8s-operators/telemetry-operator/pkg/prometheus"
 	obov1 "github.com/rhobs/observability-operator/pkg/apis/monitoring/v1alpha1"
 )
 
@@ -211,13 +213,7 @@ func (r *AutoscalingReconciler) reconcileDelete(
 	Log := r.GetLogger(ctx)
 	Log.Info("Reconciling Service delete")
 
-	ctrlResult, err := r.reconcileDeletePrometheus(ctx, instance, helper)
-	if err != nil {
-		return ctrlResult, err
-	} else if (ctrlResult != ctrl.Result{}) {
-		return ctrlResult, nil
-	}
-	ctrlResult, err = r.reconcileDeleteAodh(ctx, instance, helper)
+	ctrlResult, err := r.reconcileDeleteAodh(ctx, instance, helper)
 	if err != nil {
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
@@ -238,13 +234,7 @@ func (r *AutoscalingReconciler) reconcileInit(
 ) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 	Log.Info("Reconciling Service init")
-	ctrlResult, err := r.reconcileInitPrometheus(ctx, instance, helper, serviceLabels)
-	if err != nil {
-		return ctrlResult, err
-	} else if (ctrlResult != ctrl.Result{}) {
-		return ctrlResult, nil
-	}
-	ctrlResult, err = r.reconcileInitAodh(ctx, instance, helper, serviceLabels)
+	ctrlResult, err := r.reconcileInitAodh(ctx, instance, helper, serviceLabels)
 	if err != nil {
 		return ctrlResult, err
 	} else if (ctrlResult != ctrl.Result{}) {
@@ -456,13 +446,41 @@ func (r *AutoscalingReconciler) reconcileNormal(
 	if err != nil {
 		return ctrlResult, err
 	}
-	ctrlResult, err = r.reconcileNormalPrometheus(ctx, instance, helper)
+	prom := prometheus.MonitoringStack(instance.Name, instance.Namespace, serviceLabels, true, 1, "5h")
+	ctrlResult, err = reconcileNormalPrometheus(ctx, instance, prom, instance.Status.Conditions, helper, instance.Spec.Prometheus.DeployPrometheus)
 	if (ctrlResult != ctrl.Result{}) {
 		return ctrlResult, nil
 	}
 	if err != nil {
 		return ctrlResult, err
 	}
+
+	// Get the correct host and port for the prometheus
+	var promHost string
+	var promPort int32
+	if instance.Spec.Prometheus.DeployPrometheus {
+		serviceName := prom.Name + "-prometheus"
+		promSvc, err := service.GetServiceWithName(ctx, helper, serviceName, instance.Namespace)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		promHost = fmt.Sprintf("%s.%s.svc", serviceName, instance.Namespace)
+		promPort = service.GetServicesPortDetails(promSvc, "web").Port
+	} else {
+		promHost = instance.Spec.Prometheus.Host
+		promPort = instance.Spec.Prometheus.Port
+		if promHost == "" || promPort == 0 {
+			instance.Status.Conditions.MarkFalse(telemetryv1.PrometheusReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityError,
+				telemetryv1.PrometheusReadyConfigurationMissingMessage)
+		} else {
+			instance.Status.Conditions.MarkTrue(telemetryv1.PrometheusReadyCondition, condition.ReadyMessage)
+		}
+	}
+	instance.Status.PrometheusHost = promHost
+	instance.Status.PrometheusPort = promPort
+
 	ctrlResult, err = r.reconcileNormalAodh(ctx, instance, helper, inputHash)
 	if (ctrlResult != ctrl.Result{}) {
 		return ctrlResult, nil
@@ -701,15 +719,6 @@ func (r *AutoscalingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.M
 		}
 		return nil
 	}
-	u := &unstructured.Unstructured{}
-	u.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "apiextensions.k8s.io",
-		Kind:    "CustomResourceDefinition",
-		Version: "v1",
-	})
-	err := r.Client.Get(context.Background(), client.ObjectKey{
-		Name: "monitoringstacks.monitoring.rhobs",
-	}, u)
 
 	memcachedFn := func(o client.Object) []reconcile.Request {
 		result := []reconcile.Request{}
@@ -739,6 +748,15 @@ func (r *AutoscalingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.M
 		}
 		return nil
 	}
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "apiextensions.k8s.io",
+		Kind:    "CustomResourceDefinition",
+		Version: "v1",
+	})
+	err := r.Client.Get(context.Background(), client.ObjectKey{
+		Name: "monitoringstacks.monitoring.rhobs",
+	}, u)
 	if err != nil {
 		return ctrl.NewControllerManagedBy(mgr).
 			For(&telemetryv1.Autoscaling{}).

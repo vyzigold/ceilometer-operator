@@ -22,60 +22,31 @@ import (
 	"time"
 
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+	k8s_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	common "github.com/openstack-k8s-operators/lib-common/modules/common"
 	condition "github.com/openstack-k8s-operators/lib-common/modules/common/condition"
 	helper "github.com/openstack-k8s-operators/lib-common/modules/common/helper"
-	service "github.com/openstack-k8s-operators/lib-common/modules/common/service"
 
 	telemetryv1 "github.com/openstack-k8s-operators/telemetry-operator/api/v1beta1"
-	autoscaling "github.com/openstack-k8s-operators/telemetry-operator/pkg/autoscaling"
-	prometheus "github.com/openstack-k8s-operators/telemetry-operator/pkg/prometheus"
+	obov1 "github.com/rhobs/observability-operator/pkg/apis/monitoring/v1alpha1"
 )
 
-func (r *AutoscalingReconciler) reconcileDeletePrometheus(
+func reconcileNormalPrometheus(
 	ctx context.Context,
-	instance *telemetryv1.Autoscaling,
+	instance k8s_v1.Object,
+	prom *obov1.MonitoringStack,
+	instanceConditions condition.Conditions,
 	helper *helper.Helper,
+	deploy bool,
 ) (ctrl.Result, error) {
-	Log := r.GetLogger(ctx)
-	Log.Info("Reconciling Service Prometheus delete")
-	// TODO: finalizer prometheus
-	Log.Info(fmt.Sprintf("Reconciled Service '%s' delete successfully", autoscaling.ServiceName))
+	Log := helper.GetLogger()
+	Log.Info(fmt.Sprintf("Reconciling prometheus '%s'", prom.Name))
 
-	return ctrl.Result{}, nil
-}
-
-func (r *AutoscalingReconciler) reconcileInitPrometheus(
-	ctx context.Context,
-	instance *telemetryv1.Autoscaling,
-	helper *helper.Helper,
-	serviceLabels map[string]string,
-) (ctrl.Result, error) {
-	// TODO: init?
-	return ctrl.Result{}, nil
-}
-
-func (r *AutoscalingReconciler) reconcileNormalPrometheus(
-	ctx context.Context,
-	instance *telemetryv1.Autoscaling,
-	helper *helper.Helper,
-) (ctrl.Result, error) {
-	Log := r.GetLogger(ctx)
-	serviceLabels := map[string]string{
-		common.AppSelector: autoscaling.ServiceName,
-	}
-	prom := prometheus.MonitoringStack(instance.Name, instance.Namespace, serviceLabels, true, 1, "5h")
-	Log.Info(fmt.Sprintf("Reconciling Service Aodh '%s'", prom.Name))
-
-	var promHost string
-	var promPort int32
-
-	if instance.Spec.Prometheus.DeployPrometheus {
-		op, err := controllerutil.CreateOrUpdate(ctx, r.Client, prom, func() error {
-			err := controllerutil.SetControllerReference(instance, prom, r.Scheme)
+	if deploy {
+		op, err := controllerutil.CreateOrUpdate(ctx, helper.GetClient(), prom, func() error {
+			err := controllerutil.SetControllerReference(instance, prom, helper.GetScheme())
 			return err
 		})
 		if err != nil {
@@ -87,7 +58,7 @@ func (r *AutoscalingReconciler) reconcileNormalPrometheus(
 		promReady := true
 		for _, c := range prom.Status.Conditions {
 			if c.Status != "True" {
-				instance.Status.Conditions.MarkFalse(telemetryv1.PrometheusReadyCondition,
+				instanceConditions.MarkFalse(telemetryv1.PrometheusReadyCondition,
 					condition.Reason(c.Reason),
 					condition.SeverityError,
 					c.Message)
@@ -99,38 +70,18 @@ func (r *AutoscalingReconciler) reconcileNormalPrometheus(
 			promReady = false
 		}
 		if promReady {
-			instance.Status.Conditions.MarkTrue(telemetryv1.PrometheusReadyCondition, condition.ReadyMessage)
-			serviceName := prom.Name + "-prometheus"
-			promSvc, err := service.GetServiceWithName(ctx, helper, serviceName, instance.Namespace)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			promHost = fmt.Sprintf("%s.%s.svc", serviceName, instance.Namespace)
-			promPort = service.GetServicesPortDetails(promSvc, "web").Port
+			instanceConditions.MarkTrue(telemetryv1.PrometheusReadyCondition, condition.ReadyMessage)
 		} else {
 			return ctrl.Result{RequeueAfter: time.Duration(10) * time.Second}, fmt.Errorf("Prometheus %s isn't ready", prom.Name)
 		}
 	} else {
-		err := r.Client.Delete(ctx, prom)
+		err := helper.GetClient().Delete(ctx, prom)
 		if err != nil {
 			if !k8s_errors.IsNotFound(err) {
 				return ctrl.Result{}, nil
 			}
 		}
-		promHost = instance.Spec.Prometheus.Host
-		promPort = instance.Spec.Prometheus.Port
-		if promHost == "" || promPort == 0 {
-			instance.Status.Conditions.MarkFalse(telemetryv1.PrometheusReadyCondition,
-				condition.ErrorReason,
-				condition.SeverityError,
-				telemetryv1.PrometheusReadyConfigurationMissingMessage)
-		} else {
-			instance.Status.Conditions.MarkTrue(telemetryv1.PrometheusReadyCondition, condition.ReadyMessage)
-		}
 	}
-
-	instance.Status.PrometheusHost = promHost
-	instance.Status.PrometheusPort = promPort
 
 	Log.Info(fmt.Sprintf("Reconciled Service Aodh '%s' successfully", prom.Name))
 	return ctrl.Result{}, nil
