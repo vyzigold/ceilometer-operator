@@ -4,4 +4,5 @@ metadata:
   name: ceilometer
   namespace: openstack
 spec:
+  deployMonitoringStack: false
   secret: osp-secret

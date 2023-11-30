@@ -54,7 +54,7 @@ import (
 	keystonev1 "github.com/openstack-k8s-operators/keystone-operator/api/v1beta1"
 	telemetryv1 "github.com/openstack-k8s-operators/telemetry-operator/api/v1beta1"
 	ceilometer "github.com/openstack-k8s-operators/telemetry-operator/pkg/ceilometer"
-	prometheus "github.com/openstack-k8s-operators/telemetry-operator/pkg/prometheus"
+	observability "github.com/openstack-k8s-operators/telemetry-operator/pkg/observability"
 	monv1 "github.com/rhobs/obo-prometheus-operator/pkg/apis/monitoring/v1"
 	obov1 "github.com/rhobs/observability-operator/pkg/apis/monitoring/v1alpha1"
 )
@@ -154,6 +154,7 @@ func (r *CeilometerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			condition.UnknownCondition(condition.InputReadyCondition, condition.InitReason, condition.InputReadyInitMessage),
 			condition.UnknownCondition(condition.ServiceConfigReadyCondition, condition.InitReason, condition.ServiceConfigReadyInitMessage),
 			condition.UnknownCondition(condition.DeploymentReadyCondition, condition.InitReason, condition.DeploymentReadyInitMessage),
+			condition.UnknownCondition(telemetryv1.MonitoringStackReadyCondition, condition.InitReason, telemetryv1.MonitoringStackReadyInitMessage),
 			// service account, role, rolebinding conditions
 			condition.UnknownCondition(condition.ServiceAccountReadyCondition, condition.InitReason, condition.ServiceAccountReadyInitMessage),
 			condition.UnknownCondition(condition.RoleReadyCondition, condition.InitReason, condition.RoleReadyInitMessage),
@@ -459,15 +460,15 @@ func (r *CeilometerReconciler) reconcileNormal(ctx context.Context, instance *te
 		return ctrl.Result{}, err
 	}
 
-	prom := prometheus.MonitoringStack(instance.Name, instance.Namespace, serviceLabels, false, 1, "24h")
-	ctrlResult, err = reconcileNormalPrometheus(ctx, instance, prom, instance.Status.Conditions, helper, instance.Spec.DeployMonitoringStack)
+	monStack := observability.MonitoringStack(instance.Name, instance.Namespace, serviceLabels, false, 1, "24h")
+	ctrlResult, err = r.monitoringStackCreateOrUpdate(ctx, instance, monStack)
 
 	nodeExporterLabels := make(map[string]string)
 	nodeExporterLabels["kubernetes.io/service-name"] = "node-exporter"
 
 	serviceMonitors := []*monv1.ServiceMonitor{}
-	serviceMonitors = append(serviceMonitors, prometheus.ServiceMonitor(instance.Name+"-ceilometer", instance.Namespace, serviceLabels, serviceLabels, "30s"))
-	serviceMonitors = append(serviceMonitors, prometheus.ServiceMonitor(instance.Name+"-node-exporter", instance.Namespace, serviceLabels, nodeExporterLabels, "30s"))
+	serviceMonitors = append(serviceMonitors, observability.ServiceMonitor(instance.Name+"-ceilometer", instance.Namespace, serviceLabels, serviceLabels, "30s"))
+	serviceMonitors = append(serviceMonitors, observability.ServiceMonitor(instance.Name+"-node-exporter", instance.Namespace, serviceLabels, nodeExporterLabels, "30s"))
 
 	for _, monitor := range serviceMonitors {
 		op, err := controllerutil.CreateOrUpdate(ctx, helper.GetClient(), monitor, func() error {
@@ -478,7 +479,7 @@ func (r *CeilometerReconciler) reconcileNormal(ctx context.Context, instance *te
 			return ctrl.Result{}, err
 		}
 		if op != controllerutil.OperationResultNone {
-			Log.Info(fmt.Sprintf("Service monitor %s successfully reconciled - operation: %s", monitor.Name, string(op)))
+			Log.Info(fmt.Sprintf("Service monitor %s successfully updated - operation: %s", monitor.Name, string(op)))
 		}
 
 	}
@@ -667,6 +668,57 @@ func (r *CeilometerReconciler) transportURLCreateOrUpdate(instance *telemetryv1.
 		return err
 	})
 	return transportURL, op, err
+}
+
+func (r *CeilometerReconciler) monitoringStackCreateOrUpdate(
+	ctx context.Context,
+	instance *telemetryv1.Ceilometer,
+	monStack *obov1.MonitoringStack,
+) (ctrl.Result, error) {
+	Log := r.GetLogger(ctx)
+	Log.Info(fmt.Sprintf("Updating monitoringStack '%s'", monStack.Name))
+
+	if instance.Spec.DeployMonitoringStack {
+		op, err := controllerutil.CreateOrUpdate(ctx, r.Client, monStack, func() error {
+			err := controllerutil.SetControllerReference(instance, monStack, r.Scheme)
+			return err
+		})
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if op != controllerutil.OperationResultNone {
+			Log.Info(fmt.Sprintf("MonitoringStack %s successfully updated - operation: %s", monStack.Name, string(op)))
+		}
+		monStackReady := true
+		for _, c := range monStack.Status.Conditions {
+			if c.Status != "True" {
+				instance.Status.Conditions.MarkFalse(telemetryv1.MonitoringStackReadyCondition,
+					condition.Reason(c.Reason),
+					condition.SeverityError,
+					c.Message)
+				monStackReady = false
+				break
+			}
+		}
+		if len(monStack.Status.Conditions) == 0 {
+			monStackReady = false
+		}
+		if monStackReady {
+			instance.Status.Conditions.MarkTrue(telemetryv1.MonitoringStackReadyCondition, condition.ReadyMessage)
+		} else {
+			return ctrl.Result{RequeueAfter: time.Duration(10) * time.Second}, fmt.Errorf("MonitoringStack %s isn't ready", monStack.Name)
+		}
+	} else {
+		err := r.Client.Delete(ctx, monStack)
+		if err != nil {
+			if !k8s_errors.IsNotFound(err) {
+				return ctrl.Result{}, nil
+			}
+		}
+	}
+
+	Log.Info(fmt.Sprintf("Updated MonitoringStack '%s' successfully", monStack.Name))
+	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -30,8 +30,8 @@ const (
 	// HeatReadyCondition Status=True condition which indicates if the Heat is configured and operational
 	HeatReadyCondition condition.Type = "HeatReady"
 
-	// PrometheusReadyCondition Status=True condition which indicates if the Prometheus is configured and operational
-	PrometheusReadyCondition condition.Type = "PrometheusReady"
+	// MonitoringStackReadyCondition Status=True condition which indicates if the MonitoringStack is configured and operational
+	MonitoringStackReadyCondition condition.Type = "MonitoringStackReady"
 )
 
 // Telemetry Reasons used by API objects.
@@ -81,12 +81,15 @@ const (
 	// HeatReadyUnreadyMessage
 	HeatReadyUnreadyMessage = "Heat isn't ready yet"
 
-	// PrometheusReadyInitMessage
-	PrometheusReadyInitMessage = "Prometheus not started"
+	// MonitoringStackReadyInitMessage
+	MonitoringStackReadyInitMessage = "MonitoringStack not started"
 
-	// PrometheusReadyErrorMessage
-	PrometheusReadyErrorMessage = "Prometheus error occured %s"
+	// MonitoringStackReadyErrorMessage
+	MonitoringStackReadyErrorMessage = "MonitoringStack error occured %s"
 
-	// PrometheusReadyConfigurationMissingMessage
-	PrometheusReadyConfigurationMissingMessage = "deployPrometheus is false and either port or host isn't set"
+	// MonitoringStackReadyConfigurationMissingMessage
+	MonitoringStackReadyConfigurationMissingMessage = "useCeilometer is false and either port or host isn't set"
+
+	// MonitoringStackReadyServiceNotFoundMessage
+	MonitoringStackReadyServiceNotFoundMessage = "useCeilometer is true, but ceilometer's prometheus service couldn't be found"
 )

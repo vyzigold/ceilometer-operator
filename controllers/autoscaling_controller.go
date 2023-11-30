@@ -27,9 +27,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -59,8 +57,7 @@ import (
 	mariadbv1 "github.com/openstack-k8s-operators/mariadb-operator/api/v1beta1"
 	telemetryv1 "github.com/openstack-k8s-operators/telemetry-operator/api/v1beta1"
 	autoscaling "github.com/openstack-k8s-operators/telemetry-operator/pkg/autoscaling"
-	prometheus "github.com/openstack-k8s-operators/telemetry-operator/pkg/prometheus"
-	obov1 "github.com/rhobs/observability-operator/pkg/apis/monitoring/v1alpha1"
+	ceilometer "github.com/openstack-k8s-operators/telemetry-operator/pkg/ceilometer"
 )
 
 // AutoscalingReconciler reconciles a Autoscaling object
@@ -170,8 +167,8 @@ func (r *AutoscalingReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				condition.InitReason,
 				condition.RoleBindingReadyInitMessage),
 
-			// Prometheus, Aodh, Heat conditions
-			condition.UnknownCondition(telemetryv1.PrometheusReadyCondition, condition.InitReason, telemetryv1.PrometheusReadyInitMessage),
+			// MonitoringStack, Aodh, Heat conditions
+			condition.UnknownCondition(telemetryv1.MonitoringStackReadyCondition, condition.InitReason, telemetryv1.MonitoringStackReadyInitMessage),
 			condition.UnknownCondition(telemetryv1.HeatReadyCondition, condition.InitReason, telemetryv1.HeatReadyInitMessage),
 			condition.UnknownCondition(condition.MemcachedReadyCondition, condition.InitReason, condition.MemcachedReadyInitMessage),
 
@@ -446,36 +443,33 @@ func (r *AutoscalingReconciler) reconcileNormal(
 	if err != nil {
 		return ctrlResult, err
 	}
-	prom := prometheus.MonitoringStack(instance.Name, instance.Namespace, serviceLabels, true, 1, "5h")
-	ctrlResult, err = reconcileNormalPrometheus(ctx, instance, prom, instance.Status.Conditions, helper, instance.Spec.Prometheus.DeployPrometheus)
-	if (ctrlResult != ctrl.Result{}) {
-		return ctrlResult, nil
-	}
-	if err != nil {
-		return ctrlResult, err
-	}
 
 	// Get the correct host and port for the prometheus
 	var promHost string
 	var promPort int32
-	if instance.Spec.Prometheus.DeployPrometheus {
-		serviceName := prom.Name + "-prometheus"
+	if instance.Spec.Prometheus.UseCeilometer {
+		serviceName := ceilometer.ServiceName + "-prometheus"
 		promSvc, err := service.GetServiceWithName(ctx, helper, serviceName, instance.Namespace)
 		if err != nil {
-			return ctrl.Result{}, err
+			instance.Status.Conditions.MarkFalse(telemetryv1.MonitoringStackReadyCondition,
+				condition.ErrorReason,
+				condition.SeverityError,
+				telemetryv1.MonitoringStackReadyServiceNotFoundMessage)
+		} else {
+			promHost = fmt.Sprintf("%s.%s.svc", serviceName, instance.Namespace)
+			promPort = service.GetServicesPortDetails(promSvc, "web").Port
+			instance.Status.Conditions.MarkTrue(telemetryv1.MonitoringStackReadyCondition, condition.ReadyMessage)
 		}
-		promHost = fmt.Sprintf("%s.%s.svc", serviceName, instance.Namespace)
-		promPort = service.GetServicesPortDetails(promSvc, "web").Port
 	} else {
 		promHost = instance.Spec.Prometheus.Host
 		promPort = instance.Spec.Prometheus.Port
 		if promHost == "" || promPort == 0 {
-			instance.Status.Conditions.MarkFalse(telemetryv1.PrometheusReadyCondition,
+			instance.Status.Conditions.MarkFalse(telemetryv1.MonitoringStackReadyCondition,
 				condition.ErrorReason,
 				condition.SeverityError,
-				telemetryv1.PrometheusReadyConfigurationMissingMessage)
+				telemetryv1.MonitoringStackReadyConfigurationMissingMessage)
 		} else {
-			instance.Status.Conditions.MarkTrue(telemetryv1.PrometheusReadyCondition, condition.ReadyMessage)
+			instance.Status.Conditions.MarkTrue(telemetryv1.MonitoringStackReadyCondition, condition.ReadyMessage)
 		}
 	}
 	instance.Status.PrometheusHost = promHost
@@ -748,35 +742,33 @@ func (r *AutoscalingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.M
 		}
 		return nil
 	}
-	u := &unstructured.Unstructured{}
-	u.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "apiextensions.k8s.io",
-		Kind:    "CustomResourceDefinition",
-		Version: "v1",
-	})
-	err := r.Client.Get(context.Background(), client.ObjectKey{
-		Name: "monitoringstacks.monitoring.rhobs",
-	}, u)
-	if err != nil {
-		return ctrl.NewControllerManagedBy(mgr).
-			For(&telemetryv1.Autoscaling{}).
-			Owns(&appsv1.Deployment{}).
-			Owns(&corev1.ConfigMap{}).
-			Owns(&corev1.Service{}).
-			Owns(&corev1.Secret{}).
-			Owns(&corev1.ServiceAccount{}).
-			Owns(&keystonev1.KeystoneService{}).
-			Owns(&keystonev1.KeystoneEndpoint{}).
-			Owns(&mariadbv1.MariaDBDatabase{}).
-			Owns(&rabbitmqv1.TransportURL{}).
-			Owns(&rbacv1.Role{}).
-			Owns(&rbacv1.RoleBinding{}).
-			// Watch for TransportURL Secrets which belong to any TransportURLs created by Autoscaling CRs
-			Watches(&source.Kind{Type: &corev1.Secret{}},
-				handler.EnqueueRequestsFromMapFunc(transportURLSecretFn)).
-			Watches(&source.Kind{Type: &memcachedv1.Memcached{}},
-				handler.EnqueueRequestsFromMapFunc(memcachedFn)).
-			Complete(r)
+	promServiceFn := func(o client.Object) []reconcile.Request {
+		result := []reconcile.Request{}
+
+		// get all autoscaling CRs
+		autoscalings := &telemetryv1.AutoscalingList{}
+		listOpts := []client.ListOption{
+			client.InNamespace(o.GetNamespace()),
+		}
+		if err := r.Client.List(context.Background(), autoscalings, listOpts...); err != nil {
+			Log.Error(err, "Unable to retrieve Autoscaling CRs %w")
+			return nil
+		}
+
+		for _, cr := range autoscalings.Items {
+			if cr.Spec.Prometheus.UseCeilometer && o.GetName() == ceilometer.ServiceName+"-prometheus" {
+				name := client.ObjectKey{
+					Namespace: o.GetNamespace(),
+					Name:      cr.Name,
+				}
+				Log.Info(fmt.Sprintf("Prometheus service %s is used by Autoscaling CR %s", o.GetName(), cr.Name))
+				result = append(result, reconcile.Request{NamespacedName: name})
+			}
+		}
+		if len(result) > 0 {
+			return result
+		}
+		return nil
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&telemetryv1.Autoscaling{}).
@@ -791,12 +783,12 @@ func (r *AutoscalingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.M
 		Owns(&rabbitmqv1.TransportURL{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
-		// There is OBO installed and we can own MonitoringStack
-		Owns(&obov1.MonitoringStack{}).
 		// Watch for TransportURL Secrets which belong to any TransportURLs created by Autoscaling CRs
 		Watches(&source.Kind{Type: &corev1.Secret{}},
 			handler.EnqueueRequestsFromMapFunc(transportURLSecretFn)).
 		Watches(&source.Kind{Type: &memcachedv1.Memcached{}},
 			handler.EnqueueRequestsFromMapFunc(memcachedFn)).
+		Watches(&source.Kind{Type: &corev1.Service{}},
+			handler.EnqueueRequestsFromMapFunc(promServiceFn)).
 		Complete(r)
 }

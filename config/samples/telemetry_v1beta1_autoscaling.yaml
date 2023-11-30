@@ -10,7 +10,7 @@ metadata:
   name: autoscaling
 spec:
   prometheus:
-    deployPrometheus: false
+    useCeilometer: true
   aodh:
     secret: osp-secret
     passwordSelectors:

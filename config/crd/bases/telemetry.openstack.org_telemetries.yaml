@@ -329,21 +329,22 @@ spec:
                   prometheus:
                     description: Specification of which prometheus to use for autoscaling
                     properties:
-                      deployPrometheus:
-                        default: false
-                        description: Enables the deployment of autoscaling prometheus
-                        type: boolean
                       host:
-                        description: Host of user deployed prometheus if deployPrometheus
+                        description: Host of user deployed prometheus if useCeilometer
                           is set to false
                         type: string
                       port:
-                        description: Port of user deployed prometheus if deployPrometheus
+                        description: Port of user deployed prometheus if useCeilometer
                           is set to false
                         format: int32
                         maximum: 65535
                         minimum: 1
                         type: integer
+                      useCeilometer:
+                        default: true
+                        description: Uses prometheus deployed together with the ceilometer
+                          resource
+                        type: boolean
                     type: object
                 required:
                 - heatInstance

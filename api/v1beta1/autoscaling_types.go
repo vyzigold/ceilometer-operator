@@ -39,14 +39,14 @@ const (
 
 // Prometheus defines which prometheus to use for Autoscaling
 type Prometheus struct {
-	// Enables the deployment of autoscaling prometheus
-	// +kubebuilder:default=false
-	DeployPrometheus bool `json:"deployPrometheus,omitempty"`
+	// Uses prometheus deployed together with the ceilometer resource
+	// +kubebuilder:default=true
+	UseCeilometer bool `json:"useCeilometer,omitempty"`
 
-	// Host of user deployed prometheus if deployPrometheus is set to false
+	// Host of user deployed prometheus if useCeilometer is set to false
 	Host string `json:"host,omitempty"`
 
-	// Port of user deployed prometheus if deployPrometheus is set to false
+	// Port of user deployed prometheus if useCeilometer is set to false
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	Port int32 `json:"port,omitempty"`
