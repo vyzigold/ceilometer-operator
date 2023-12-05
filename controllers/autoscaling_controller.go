@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -64,8 +65,10 @@ import (
 // AutoscalingReconciler reconciles a Autoscaling object
 type AutoscalingReconciler struct {
 	client.Client
-	Kclient kubernetes.Interface
-	Scheme  *runtime.Scheme
+	Kclient             kubernetes.Interface
+	Scheme              *runtime.Scheme
+	Controller          controller.Controller
+	DependenciesWatched bool
 }
 
 // GetLogger returns a logger object with a prefix of "conroller.name" and aditional controller context fields
@@ -262,6 +265,61 @@ func (r *AutoscalingReconciler) reconcileNormal(
 ) (ctrl.Result, error) {
 	Log := r.GetLogger(ctx)
 	Log.Info(fmt.Sprintf("Reconciling Service '%s'", autoscaling.ServiceName))
+
+	//	oboFn := func(o client.Object) []reconcile.Request {
+	//		result := []reconcile.Request{}
+	//
+	//		// get all autoscaling CRs
+	//		autoscalings := &telemetryv1.AutoscalingList{}
+	//		listOpts := []client.ListOption{
+	//			client.InNamespace(o.GetNamespace()),
+	//		}
+	//		if err := r.Client.List(context.Background(), autoscalings, listOpts...); err != nil {
+	//			Log.Error(err, "Unable to retrieve Autoscaling CRs %w")
+	//			return nil
+	//		}
+	//
+	//		for _, cr := range autoscalings.Items {
+	//			name := client.ObjectKey{
+	//				Namespace: o.GetNamespace(),
+	//				Name:      cr.Name,
+	//			}
+	//			Log.Info(fmt.Sprintf("Prometheus service %s is used by Autoscaling CR %s", o.GetName(), cr.Name))
+	//			result = append(result, reconcile.Request{NamespacedName: name})
+	//		}
+	//		if len(result) > 0 {
+	//			return result
+	//		}
+	//		return nil
+	//	}
+
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "apiextensions.k8s.io",
+		Kind:    "CustomResourceDefinition",
+		Version: "v1",
+	})
+
+	err := r.Client.Get(context.Background(), client.ObjectKey{
+		Name: "monitoringstacks.monitoring.rhobs",
+	}, u)
+
+	if err != nil {
+		Log.Info("The CRD isn't there")
+		return ctrl.Result{RequeueAfter: time.Duration(10) * time.Second}, nil
+	}
+
+	if err == nil && !r.DependenciesWatched {
+		Log.Info("Adding a Watch, the CRD is there")
+		// There is OBO installed and we can own MonitoringStack
+		r.Controller.Watch(&source.Kind{Type: &obov1.MonitoringStack{}},
+			&handler.EnqueueRequestForOwner{
+				OwnerType:    &telemetryv1.Autoscaling{},
+				IsController: true,
+			},
+		)
+		r.DependenciesWatched = true
+	}
 
 	// Service account, role, binding
 	rbacRules := []rbacv1.PolicyRule{
@@ -701,16 +759,6 @@ func (r *AutoscalingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.M
 		}
 		return nil
 	}
-	u := &unstructured.Unstructured{}
-	u.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "apiextensions.k8s.io",
-		Kind:    "CustomResourceDefinition",
-		Version: "v1",
-	})
-	err := r.Client.Get(context.Background(), client.ObjectKey{
-		Name: "monitoringstacks.monitoring.rhobs",
-	}, u)
-
 	memcachedFn := func(o client.Object) []reconcile.Request {
 		result := []reconcile.Request{}
 
@@ -739,28 +787,7 @@ func (r *AutoscalingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.M
 		}
 		return nil
 	}
-	if err != nil {
-		return ctrl.NewControllerManagedBy(mgr).
-			For(&telemetryv1.Autoscaling{}).
-			Owns(&appsv1.Deployment{}).
-			Owns(&corev1.ConfigMap{}).
-			Owns(&corev1.Service{}).
-			Owns(&corev1.Secret{}).
-			Owns(&corev1.ServiceAccount{}).
-			Owns(&keystonev1.KeystoneService{}).
-			Owns(&keystonev1.KeystoneEndpoint{}).
-			Owns(&mariadbv1.MariaDBDatabase{}).
-			Owns(&rabbitmqv1.TransportURL{}).
-			Owns(&rbacv1.Role{}).
-			Owns(&rbacv1.RoleBinding{}).
-			// Watch for TransportURL Secrets which belong to any TransportURLs created by Autoscaling CRs
-			Watches(&source.Kind{Type: &corev1.Secret{}},
-				handler.EnqueueRequestsFromMapFunc(transportURLSecretFn)).
-			Watches(&source.Kind{Type: &memcachedv1.Memcached{}},
-				handler.EnqueueRequestsFromMapFunc(memcachedFn)).
-			Complete(r)
-	}
-	return ctrl.NewControllerManagedBy(mgr).
+	control, err := ctrl.NewControllerManagedBy(mgr).
 		For(&telemetryv1.Autoscaling{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.ConfigMap{}).
@@ -773,12 +800,12 @@ func (r *AutoscalingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.M
 		Owns(&rabbitmqv1.TransportURL{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
-		// There is OBO installed and we can own MonitoringStack
-		Owns(&obov1.MonitoringStack{}).
 		// Watch for TransportURL Secrets which belong to any TransportURLs created by Autoscaling CRs
 		Watches(&source.Kind{Type: &corev1.Secret{}},
 			handler.EnqueueRequestsFromMapFunc(transportURLSecretFn)).
 		Watches(&source.Kind{Type: &memcachedv1.Memcached{}},
 			handler.EnqueueRequestsFromMapFunc(memcachedFn)).
-		Complete(r)
+		Build(r)
+	r.Controller = control
+	return err
 }
