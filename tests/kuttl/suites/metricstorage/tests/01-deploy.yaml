@@ -1,0 +1,14 @@
+apiVersion: telemetry.openstack.org/v1beta1
+kind: MetricStorage
+metadata:
+  name: telemetry-kuttl
+spec:
+  type: prometheus
+  alertingEnabled: true
+  scrapeInterval: 30s
+  replicas: 1
+  storage:
+    strategy: persistent
+    retention: 24h
+    persistent:
+      pvcStorageRequest: 20G
