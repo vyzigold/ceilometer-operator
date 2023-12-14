@@ -39,6 +39,7 @@ import (
 	dataplanev1 "github.com/openstack-k8s-operators/dataplane-operator/api/v1beta1"
 	heatv1 "github.com/openstack-k8s-operators/heat-operator/api/v1beta1"
 	memcachedv1 "github.com/openstack-k8s-operators/infra-operator/apis/memcached/v1beta1"
+	infranetworkv1 "github.com/openstack-k8s-operators/infra-operator/apis/network/v1beta1"
 	rabbitmqv1 "github.com/openstack-k8s-operators/infra-operator/apis/rabbitmq/v1beta1"
 	keystonev1 "github.com/openstack-k8s-operators/keystone-operator/api/v1beta1"
 	mariadbv1beta1 "github.com/openstack-k8s-operators/mariadb-operator/api/v1beta1"
@@ -69,6 +70,7 @@ func init() {
 	utilruntime.Must(memcachedv1.AddToScheme(scheme))
 	utilruntime.Must(heatv1.AddToScheme(scheme))
 	utilruntime.Must(dataplanev1.AddToScheme(scheme))
+	utilruntime.Must(infranetworkv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 

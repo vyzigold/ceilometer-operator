@@ -95,6 +95,22 @@ rules:
   - update
   - watch
 - apiGroups:
+  - dataplane.openstack.org
+  resources:
+  - openstackdataplanenodesets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - dataplane.openstack.org
+  resources:
+  - openstackdataplaneservices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - heat.openstack.org
   resources:
   - heats
@@ -189,6 +205,14 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - network.openstack.org
+  resources:
+  - ipsets
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - rabbitmq.openstack.org

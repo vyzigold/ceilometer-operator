@@ -9,4 +9,12 @@ metadata:
     app.kubernetes.io/created-by: telemetry-operator
   name: metricstorage-sample
 spec:
-  # TODO(user): Add fields here
+  redhatMetricStorage:
+    type: prometheus
+    alertingEnabled: true
+    scrapeInterval: 30s
+    storage:
+      strategy: persistent
+      retention: 24h
+      persistent:
+        pvcStorageRequest: 20G

@@ -23,55 +23,77 @@ import (
 
 )
 
+// PersistentStorage defines storage options used for persistent storage
 type PersistentStorage struct {
+	// PvcStorageRequest The amount of storage to request in PVC
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default="20G"
-	PvcStorageRequest string `json:"pvcStorageRequest,omitempty"`
+	PvcStorageRequest string `json:"pvcStorageRequest"`
 
+	// PvcStorageSelector The Label selector to specify in PVCs
 	// +kubebuilder:validation:Optional
 	PvcStorageSelector metav1.LabelSelector `json:"pvcStorageSelector,omitempty"`
 
+	// PvcStorageClass The storage class to use for storing metrics
 	// +kubebuilder:validation:Optional
 	PvcStorageClass string `json:"pvcStorageClass,omitempty"`
 }
 
+// Storage defines the options used for storage of metrics
 type Storage struct {
+	// Strategy to use for storage. Can be "persistent"
+	// or empty, in which case a COO default is used
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Enum=persistent;ephemeral
+	// +kubebuilder:validation:Enum=persistent
 	// +kubebuilder:default=persistent
-	Strategy string `json:"strategy,omitempty"`
+	Strategy string `json:"strategy"`
 
+	// Retention time for metrics
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default="24h"
-	Retention string `json:"retention,omitempty"`
+	Retention string `json:"retention"`
 
+	// Used to specify the options of persistent storage when
+	// strategy = "persistent"
 	// +kubebuilder:validation:Optional
-	Persistent PersistentStorage `json:"persistent,omitempty"`
+	Persistent PersistentStorage `json:"persistent"`
+}
+
+// RedHatMetricsStorage defines the options for a Red Hat supported metric storage
+type RedHatMetricStorage struct {
+	// Type defines the type of the storage.
+	// Can only be "prometheus" at the moment
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=prometheus
+	// +kubebuilder:default=prometheus
+	Type string `json:"type"`
+
+	// AlertingEnabled allows to enable or disable alertmanager
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=true
+	AlertingEnabled bool `json:"alertingEnabled"`
+
+	// ScrapeInterval sets the interval between scrapes
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default="30s"
+	ScrapeInterval string `json:"scrapeInterval"`
+
+	// Storage allows to define options for how to store metrics
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default={strategy: persistent, retention: "24h", persistent: {pvcStorageRequest: "20G"}}
+	Storage `json:"storage"`
 }
 
 // MetricStorageSpec defines the desired state of MetricStorage
 type MetricStorageSpec struct {
+	// RedHatMetricStorage allows to define a metric storage with
+	// options supported by Red Hat
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Enum=prometheus
-	// +kubebuilder:default=prometheus
-	Type string `json:"type,omitempty"`
+	RedHatMetricStorage RedHatMetricStorage `json:"redhatMetricStorage,omitempty"`
 
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=true
-	AlertingEnabled bool `json:"alertingEnabled,omitempty"`
-
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default="30s"
-	ScrapeInterval string `json:"scrapeInterval,omitempty"`
-
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=1
-	Replicas int32 `json:"replicas,omitempty"`
-
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default={strategy: persistent, retention: "24h", persistent: {pvcStorageRequest: "20G"}}
-	Storage `json:"storage,omitempty"`
-
+	// CustomMonitoringStack allows to deploy a custom monitoring
+	// stack when the options in "RedHatMetricStorage" aren't
+	// enough
 	// +kubebuilder:validation:Optional
 	CustomMonitoringStack obov1.MonitoringStackSpec `json:"customMonitoringStack,omitempty"`
 }

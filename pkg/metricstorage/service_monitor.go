@@ -28,6 +28,16 @@ func ServiceMonitor(
 	labels map[string]string,
 	selector map[string]string,
 ) *monv1.ServiceMonitor {
+	var scrapeInterval string
+	if instance.Spec.RedHatMetricStorage.ScrapeInterval != "" {
+		scrapeInterval = instance.Spec.RedHatMetricStorage.ScrapeInterval
+		// TODO: Uncomment the following else if once we update to OBOv0.0.21
+		//} else if instance.Spec.CustomMonitoringStack.PrometheusConfig.ScrapeInterval {
+		//	scrapeInterval = instance.Spec.CustomMonitoringStack.PrometheusConfig.ScrapeInterval
+	} else {
+		scrapeInterval = DefaultScrapeInterval
+	}
+
 	serviceMonitor := &monv1.ServiceMonitor{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      instance.Name,
@@ -37,7 +47,7 @@ func ServiceMonitor(
 		Spec: monv1.ServiceMonitorSpec{
 			Endpoints: []monv1.Endpoint{
 				{
-					Interval: monv1.Duration(instance.Spec.ScrapeInterval),
+					Interval: monv1.Duration(scrapeInterval),
 					MetricRelabelConfigs: []*monv1.RelabelConfig{
 						{
 							Action:       "labeldrop",

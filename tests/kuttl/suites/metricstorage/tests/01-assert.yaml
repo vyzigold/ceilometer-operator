@@ -59,5 +59,16 @@ spec:
   selector:
     matchLabels:
       service: ceilometer
-# TODO: ScrapeConfig
-
+---
+apiVersion: monitoring.rhobs/v1
+kind: ScrapeConfig
+metadata:
+  labels:
+    service: metricStorage
+  name: telemetry-kuttl
+  ownerReferences:
+    kind: MetricStorage
+    name: telemetry-kuttl
+spec:
+  staticConfigs:
+  - targets:

@@ -35,12 +35,9 @@ spec:
           spec:
             description: MetricStorageSpec defines the desired state of MetricStorage
             properties:
-              alertingEnabled:
-                default: true
-                type: boolean
               customMonitoringStack:
-                description: MonitoringStackSpec is the specification for desired
-                  Monitoring Stack
+                description: CustomMonitoringStack allows to deploy a custom monitoring
+                  stack when the options in "RedHatMetricStorage" aren't enough
                 properties:
                   alertmanagerConfig:
                     default:
@@ -1016,92 +1013,108 @@ spec:
                     pattern: ^(0|(([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?)$
                     type: string
                 type: object
-              replicas:
-                default: 1
-                format: int32
-                type: integer
-              scrapeInterval:
-                default: 30s
-                type: string
-              storage:
-                default:
-                  persistent:
-                    pvcStorageRequest: 20G
-                  retention: 24h
-                  strategy: persistent
+              redhatMetricStorage:
+                description: RedHatMetricStorage allows to define a metric storage
+                  with options supported by Red Hat
                 properties:
-                  persistent:
-                    properties:
-                      pvcStorageClass:
-                        type: string
-                      pvcStorageRequest:
-                        default: 20G
-                        type: string
-                      pvcStorageSelector:
-                        description: A label selector is a label query over a set
-                          of resources. The result of matchLabels and matchExpressions
-                          are ANDed. An empty label selector matches all objects.
-                          A null label selector matches no objects.
-                        properties:
-                          matchExpressions:
-                            description: matchExpressions is a list of label selector
-                              requirements. The requirements are ANDed.
-                            items:
-                              description: A label selector requirement is a selector
-                                that contains values, a key, and an operator that
-                                relates the key and values.
-                              properties:
-                                key:
-                                  description: key is the label key that the selector
-                                    applies to.
-                                  type: string
-                                operator:
-                                  description: operator represents a key's relationship
-                                    to a set of values. Valid operators are In, NotIn,
-                                    Exists and DoesNotExist.
-                                  type: string
-                                values:
-                                  description: values is an array of string values.
-                                    If the operator is In or NotIn, the values array
-                                    must be non-empty. If the operator is Exists or
-                                    DoesNotExist, the values array must be empty.
-                                    This array is replaced during a strategic merge
-                                    patch.
-                                  items:
-                                    type: string
-                                  type: array
-                              required:
-                              - key
-                              - operator
-                              type: object
-                            type: array
-                          matchLabels:
-                            additionalProperties:
-                              type: string
-                            description: matchLabels is a map of {key,value} pairs.
-                              A single {key,value} in the matchLabels map is equivalent
-                              to an element of matchExpressions, whose key field is
-                              "key", the operator is "In", and the values array contains
-                              only "value". The requirements are ANDed.
-                            type: object
-                        type: object
-                        x-kubernetes-map-type: atomic
-                    type: object
-                  retention:
-                    default: 24h
+                  alertingEnabled:
+                    default: true
+                    description: AlertingEnabled allows to enable or disable alertmanager
+                    type: boolean
+                  scrapeInterval:
+                    default: 30s
+                    description: ScrapeInterval sets the interval between scrapes
                     type: string
-                  strategy:
-                    default: persistent
+                  storage:
+                    default:
+                      persistent:
+                        pvcStorageRequest: 20G
+                      retention: 24h
+                      strategy: persistent
+                    description: Storage allows to define options for how to store
+                      metrics
+                    properties:
+                      persistent:
+                        description: Used to specify the options of persistent storage
+                          when strategy = "persistent"
+                        properties:
+                          pvcStorageClass:
+                            description: PvcStorageClass The storage class to use
+                              for storing metrics
+                            type: string
+                          pvcStorageRequest:
+                            default: 20G
+                            description: PvcStorageRequest The amount of storage to
+                              request in PVC
+                            type: string
+                          pvcStorageSelector:
+                            description: PvcStorageSelector The Label selector to
+                              specify in PVCs
+                            properties:
+                              matchExpressions:
+                                description: matchExpressions is a list of label selector
+                                  requirements. The requirements are ANDed.
+                                items:
+                                  description: A label selector requirement is a selector
+                                    that contains values, a key, and an operator that
+                                    relates the key and values.
+                                  properties:
+                                    key:
+                                      description: key is the label key that the selector
+                                        applies to.
+                                      type: string
+                                    operator:
+                                      description: operator represents a key's relationship
+                                        to a set of values. Valid operators are In,
+                                        NotIn, Exists and DoesNotExist.
+                                      type: string
+                                    values:
+                                      description: values is an array of string values.
+                                        If the operator is In or NotIn, the values
+                                        array must be non-empty. If the operator is
+                                        Exists or DoesNotExist, the values array must
+                                        be empty. This array is replaced during a
+                                        strategic merge patch.
+                                      items:
+                                        type: string
+                                      type: array
+                                  required:
+                                  - key
+                                  - operator
+                                  type: object
+                                type: array
+                              matchLabels:
+                                additionalProperties:
+                                  type: string
+                                description: matchLabels is a map of {key,value} pairs.
+                                  A single {key,value} in the matchLabels map is equivalent
+                                  to an element of matchExpressions, whose key field
+                                  is "key", the operator is "In", and the values array
+                                  contains only "value". The requirements are ANDed.
+                                type: object
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
+                      retention:
+                        default: 24h
+                        description: Retention time for metrics
+                        type: string
+                      strategy:
+                        default: persistent
+                        description: Strategy to use for storage. Can be "persistent"
+                          or empty, in which case a COO default is used
+                        enum:
+                        - persistent
+                        type: string
+                    type: object
+                  type:
+                    default: prometheus
+                    description: Type defines the type of the storage. Can only be
+                      "prometheus" at the moment
                     enum:
-                    - persistent
-                    - ephemeral
+                    - prometheus
                     type: string
                 type: object
-              type:
-                default: prometheus
-                enum:
-                - prometheus
-                type: string
             type: object
           status:
             description: MetricStorageStatus defines the observed state of MetricStorage

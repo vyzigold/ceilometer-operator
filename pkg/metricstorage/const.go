@@ -15,9 +15,20 @@ limitations under the License.
 
 package metricstorage
 
+import "time"
+
 const (
 	// DefaultServiceName -
 	DefaultServiceName = "metric-storage"
 	// DefaultPvcStorageRequest -
 	DefaultPvcStorageRequest = "20G"
+	// DefaultNodeExporterPort -
+	DefaultNodeExporterPort = 9100
+	// DefaultScrapeInterval -
+	DefaultScrapeInterval = "30s"
+	// PauseBetweenWatchAttempts -
+	PauseBetweenWatchAttempts = time.Duration(10) * time.Second
 )
+
+// PrometheusReplicas -
+var PrometheusReplicas int32 = 1

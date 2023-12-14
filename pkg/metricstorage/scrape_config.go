@@ -17,6 +17,7 @@ limitations under the License.
 package metricstorage
 
 import (
+	telemetryv1 "github.com/openstack-k8s-operators/telemetry-operator/api/v1beta1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -28,22 +29,39 @@ import (
 
 // ScrapeConfig creates a ScrapeConfig CR
 func ScrapeConfig(
-	name string,
-	namespace string,
+	instance *telemetryv1.MetricStorage,
 	labels map[string]string,
-	selector map[string]string,
-	scrape_interval string,
+	targets []string,
 ) *unstructured.Unstructured {
+	var scrapeInterval string
+	if instance.Spec.RedHatMetricStorage.ScrapeInterval != "" {
+		scrapeInterval = instance.Spec.RedHatMetricStorage.ScrapeInterval
+		// TODO: Uncomment the following else if once we update to OBOv0.0.21
+		//} else if instance.Spec.CustomMonitoringStack.PrometheusConfig.ScrapeInterval {
+		//	scrapeInterval = instance.Spec.CustomMonitoringStack.PrometheusConfig.ScrapeInterval
+	} else {
+		scrapeInterval = DefaultScrapeInterval
+	}
 	scrapeConfig := &unstructured.Unstructured{}
+	scrapeConfig.SetUnstructuredContent(map[string]interface{}{
+		"spec": map[string]interface{}{
+			"scrapeInterval": scrapeInterval,
+			"staticConfigs": []interface{}{
+				map[string]interface{}{
+					"targets": targets,
+				},
+			},
+		},
+	})
+	// NOTE: SetUnstructuredContent will overvrite any data, including GVK, name, ...
+	//       Any other Set* function call must be done after SetUnstructuredContent
 	scrapeConfig.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "monitoring.rhobs",
 		Version: "v1alpha1",
 		Kind:    "ScrapeConfig",
 	})
-	scrapeConfig.SetName(name)
-	scrapeConfig.SetNamespace(namespace)
+	scrapeConfig.SetName(instance.Name)
+	scrapeConfig.SetNamespace(instance.Namespace)
 	scrapeConfig.SetLabels(labels)
-	// TODO: set spec
-	// SetUnstructuredContent
 	return scrapeConfig
 }
