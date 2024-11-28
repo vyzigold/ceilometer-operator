@@ -168,7 +168,8 @@ type CeilometerStatus struct {
 	// the openstack-operator in the top-level CR (e.g. the ContainerImage)
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	MysqldExporterStatus MysqldExporterStatus `json:"mysqldExporterStatus,omitempty"`
+	// Counter
+	Counter int `json:"counter,omitempty"`
 }
 
 // KSMStatus defines the observed state of kube-state-metrics
@@ -202,6 +203,9 @@ type MysqldExporterStatus struct {
 
 	// List of galera CRs, which are being exported with mysqld_exporter
 	ExportedGaleras []string `json:"exportedGaleras,omitempty"`
+
+	// Counter
+	Counter int `json:"counter,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -217,6 +221,7 @@ type Ceilometer struct {
 	Spec             CeilometerSpec   `json:"spec,omitempty"`
 	CeilometerStatus CeilometerStatus `json:"status,omitempty"`
 	KSMStatus        KSMStatus        `json:"ksmStatus,omitempty"`
+	MysqldExporterStatus MysqldExporterStatus `json:"mysqldExporterStatus,omitempty"`
 }
 
 //+kubebuilder:object:root=true
